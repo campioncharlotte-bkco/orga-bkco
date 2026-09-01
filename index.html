@@ -342,8 +342,7 @@ textarea{min-height:84px;resize:vertical;font-size:15px;line-height:1.5}
   </div>
   <div class="row">
     <div><label>Assigné à</label><select id="f-assigne"></select></div>
-    <div><label>Visibilité</label><select id="f-prive">
-      <option value="0">Toute l'équipe</option><option value="1">Personnel</option></select></div>
+    <div><label>Visible par</label><select id="f-prive"></select></div>
   </div>
   <label>Détail</label>
   <textarea id="f-desc" placeholder="Contexte, ce qui a déjà été fait, ce qui bloque…"></textarea>
@@ -522,15 +521,23 @@ function couleur(it){
   if(it.statut==='En cours') return 'var(--cool)';
   return 'var(--txt-2)';
 }
-/* Les sujets personnels n'apparaissent que dans l'onglet Moi de leur auteur. */
-const visibles = ()=> S.items.filter(i=>!i.prive);
+/* Visibilité d'un sujet :
+   - prive = false            -> toute l'équipe
+   - prive = true, sans assigné -> l'auteur seul (onglet Moi)
+   - prive = true, avec assigné -> l'auteur et la personne assignée */
+const perso        = i => i.prive && !i.assigne_id;
+const pourMoi      = i => !i.prive || (S.moi && (i.auteur_id==S.moi.id || i.assigne_id==S.moi.id));
+const visibles     = ()=> S.items.filter(i=>pourMoi(i) && !perso(i));
+/* Un sujet sans restaurant concerne tous les restaurants. */
+const concerne     = (i,rid) => i.restaurant_id==null || i.restaurant_id==rid;
 const ouverts  = ()=> visibles().filter(i=>i.statut!=='Fait');
 const nomUser  = id => { const u=S.users.find(x=>x.id==id); return u?u.nom:null; };
-function mesPerso(){ return S.items.filter(i=>i.prive && i.auteur_id==S.moi.id); }
-function mesAssignes(){ return S.items.filter(i=>!i.prive && i.assigne_id==S.moi.id && i.statut!=='Fait'); }
-function mesCrees(){ return S.items.filter(i=>!i.prive && i.auteur_id==S.moi.id && i.assigne_id!=S.moi.id && i.statut!=='Fait'); }
+function mesPerso(){ return S.items.filter(i=>perso(i) && i.auteur_id==S.moi.id); }
+function mesAssignes(){ return S.items.filter(i=>i.assigne_id==S.moi.id && i.statut!=='Fait'); }
+function mesCrees(){ return S.items.filter(i=>!perso(i) && i.auteur_id==S.moi.id && i.assigne_id!=S.moi.id && i.statut!=='Fait'); }
 const trie    = arr => arr.slice().sort((a,b)=>score(b)-score(a));
-const nomResto= id => { const r=S.restos.find(x=>x.id==id); return r?r.nom:'—'; };
+const nomResto= id => { if(id==null) return 'Tous les restaurants';
+  const r=S.restos.find(x=>x.id==id); return r?r.nom:'—'; };
 function rangDansFile(id){ return trie(ouverts()).findIndex(i=>i.id==id)+1; }
 
 /* ============================================================
@@ -637,7 +644,8 @@ function analyseLocale(texte){
     let resto = detectResto(t);
     const membre = detectMembre(t);
     if(!resto && membre) resto = membre.restaurant_id;
-    if(!resto){ resto = S.restos.length?S.restos[0].id:null; doute.push('restaurant'); }
+    if(/tous les restaurants|tous les sites|partout|les 7 restaurants|tout le groupe/.test(t)) resto=null;
+    else if(!resto){ resto = S.restos.length?S.restos[0].id:null; doute.push('restaurant'); }
     const cat = detectCat(t);
     if(cat==='organisation') doute.push('categorie');
     let titre = bout.trim().replace(/^./,c=>c.toUpperCase());
@@ -672,10 +680,12 @@ function nettoie(s){
   const ok = id => S.restos.some(r=>r.id==id);
   const dt = d => (d && /^\d{4}-\d{2}-\d{2}$/.test(d)) ? d : null;
   const doute = Array.isArray(s.incertain)?s.incertain.slice():[];
+  const tous = s.restaurant_id===0 || s.restaurant_id==='tous' || s.tous_restaurants===true;
   let resto = ok(s.restaurant_id)? s.restaurant_id : null;
   const membre = S.membres.find(m=>m.id==s.membre_id)||null;
   if(!resto && membre) resto = membre.restaurant_id;
-  if(!resto){ resto = S.restos.length?S.restos[0].id:null; if(!doute.includes('restaurant')) doute.push('restaurant'); }
+  if(!resto && !tous){ resto = S.restos.length?S.restos[0].id:null; if(!doute.includes('restaurant')) doute.push('restaurant'); }
+  if(tous) resto=null;
   return {
     titre:(s.titre||'Sujet sans titre').slice(0,120),
     restaurant_id:resto,
@@ -741,6 +751,7 @@ function carteHTML(m,i){
     ${membre?`<div class="who">${esc(membre.nom)} · ${esc(membre.poste||'')} · ${esc(nomResto(membre.restaurant_id))}</div>`:''}
     <div class="grid">
       <select class="${d('restaurant')}" onchange="majCarte(${i},'restaurant_id',this.value)">
+        <option value="" ${s.restaurant_id==null?'selected':''}>Tous les restaurants</option>
         ${S.restos.map(r=>`<option value="${r.id}" ${r.id==s.restaurant_id?'selected':''}>${esc(r.nom)}</option>`).join('')}
       </select>
       <select class="${d('categorie')}" onchange="majCarte(${i},'categorie',this.value)">
@@ -757,8 +768,7 @@ function carteHTML(m,i){
         ${S.users.map(u=>`<option value="${u.id}" ${u.id==s.assigne_id?'selected':''}>Pour ${esc(u.nom)}</option>`).join('')}
       </select>
       <select onchange="majCarte(${i},'prive',this.value)">
-        <option value="0" ${s.prive?'':'selected'}>Toute l'équipe</option>
-        <option value="1" ${s.prive?'selected':''}>Personnel</option>
+        ${optionsVisibilite(!s.prive?'equipe':(s.assigne_id?'duo':'perso'), s.assigne_id)}
       </select>
     </div>
     <div class="acts2">
@@ -769,9 +779,11 @@ function carteHTML(m,i){
 }
 function majCarte(i,champ,val){
   const m=S.chat[i]; if(!m) return;
-  if(champ==='priorite'||champ==='restaurant_id') val=+val;
+  if(champ==='priorite') val=+val;
+  if(champ==='restaurant_id') val=val===''?null:+val;
   if(champ==='assigne_id') val=val?+val:null;
-  if(champ==='prive') val=(val==='1'||val===true);
+  if(champ==='prive'){ if(val==='perso'){ m.s.assigne_id=null; val=true; }
+                       else val=(val==='duo'); }
   if(champ==='echeance') val=dateHorizon(val);
   m.s[champ]=val;
   if(m.s.incertain) m.s.incertain=m.s.incertain.filter(c=>!(champ.startsWith(c)||c.startsWith(champ.replace('_id',''))));
@@ -851,7 +863,7 @@ function ligneItem(it,rang){
         ${assigne?`<span class="chip">→ ${esc(assigne)}</span>`:''}
         ${it.responsable?`<span class="chip">→ ${esc(it.responsable)}</span>`:''}
         ${auteur?`<span class="chip">noté par ${esc(auteur)}</span>`:''}
-        ${it.prive?`<span class="chip">personnel</span>`:''}
+        ${perso(it)?`<span class="chip">moi seule</span>`:(it.prive?`<span class="chip">restreint</span>`:'')}
       </span>
     </span></button>`;
 }
@@ -867,7 +879,7 @@ function renderPilotage(){
     ? top.map((it,i)=>ligneItem(it,i+1)).join('')
     : `<div class="empty"><b>Rien en attente</b>Note un sujet depuis l'écran Capture</div>`;
   $('pil-restos').innerHTML = S.restos.map(r=>{
-    const l=ouv.filter(i=>i.restaurant_id==r.id);
+    const l=ouv.filter(i=>concerne(i,r.id));
     const urg=l.filter(i=>i.priorite==1||(jours(i.echeance)!==null&&jours(i.echeance)<0)).length;
     return `<button class="resto" onclick="openResto2(${r.id})">
       <span><span class="nm">${esc(r.nom)}</span><br><span class="zn">${esc(r.zone||'')}</span></span>
@@ -884,7 +896,7 @@ function renderPilotage(){
 function renderRestos(){
   const ouv=ouverts();
   $('resto-list').innerHTML = S.restos.map(r=>{
-    const l=ouv.filter(i=>i.restaurant_id==r.id);
+    const l=ouv.filter(i=>concerne(i,r.id));
     const eq=S.membres.filter(m=>m.restaurant_id==r.id).length;
     return `<button class="resto" onclick="openResto2(${r.id})">
       <span><span class="nm">${esc(r.nom)}</span><br>
@@ -895,7 +907,7 @@ function renderRestos(){
 function renderResto(){
   const r=S.restos.find(x=>x.id==S.resto); if(!r) return go('restos');
   $('title').textContent=r.nom;
-  const ouv=ouverts().filter(i=>i.restaurant_id==r.id);
+  const ouv=ouverts().filter(i=>concerne(i,r.id));
   $('subtitle').innerHTML=`${ouv.length} ouvert${ouv.length>1?'s':''}<br>${esc(r.zone||'')}`;
   const tabs=[['apercu','Aperçu'],['equipe','Équipe'],...CATS.map(c=>[c.id,c.nom.split(' /')[0]]),['fait','Traités']];
   $('resto-tabs').innerHTML = tabs.map(([id,l])=>{
@@ -934,7 +946,7 @@ function renderResto(){
     b.innerHTML += `<button class="btn sec" onclick="openMembre()">Ajouter un collaborateur</button>`;
   }
   else if(S.tab==='fait'){
-    const f=visibles().filter(i=>i.restaurant_id==r.id&&i.statut==='Fait')
+    const f=visibles().filter(i=>concerne(i,r.id)&&i.statut==='Fait')
       .sort((a,b)=>new Date(b.date_cloture||0)-new Date(a.date_cloture||0));
     b.innerHTML = (f.length? f.map(it=>ligneItem(it)).join('')
       : `<div class="empty"><b>Rien d'archivé</b>Les sujets traités apparaîtront ici</div>`)
@@ -972,7 +984,7 @@ function vieuxTraites(portee){
   const lim = Date.now()-SIX_MOIS;
   const base = portee==='perso' ? mesPerso() : visibles();
   return base.filter(i=>i.statut==='Fait' && dateFin(i)<lim
-    && (portee===null||portee==='perso' ? true : i.restaurant_id==portee));
+    && (portee===null||portee==='perso' ? true : concerne(i,portee)));
 }
 function boutonPurge(portee,cle){
   const n=vieuxTraites(portee).length;
@@ -1072,7 +1084,17 @@ function openSheet(id){ $(id).classList.add('on'); }
 function closeSheet(id){ $(id).classList.remove('on'); }
 document.querySelectorAll('.sheet').forEach(s=>s.addEventListener('click',e=>{ if(e.target===s) s.classList.remove('on'); }));
 
-function optionsResto(sel,v){ sel.innerHTML=S.restos.map(r=>`<option value="${r.id}" ${r.id==v?'selected':''}>${esc(r.nom)}</option>`).join(''); }
+function optionsResto(sel,v){
+  sel.innerHTML=`<option value="" ${v==null?'selected':''}>Tous les restaurants</option>`
+    +S.restos.map(r=>`<option value="${r.id}" ${r.id==v?'selected':''}>${esc(r.nom)}</option>`).join('');
+}
+function optionsVisibilite(val,assigne){
+  const a=nomUser(assigne);
+  return `<option value="equipe" ${val==='equipe'?'selected':''}>Toute l'équipe</option>`
+    + (a?`<option value="duo" ${val==='duo'?'selected':''}>${esc(a)} et moi seulement</option>`:'')
+    + `<option value="perso" ${val==='perso'?'selected':''}>Moi seule</option>`;
+}
+const visibiliteDe = i => !i.prive ? 'equipe' : (i.assigne_id? 'duo':'perso');
 function optionsMembre(resId,v){
   const l=S.membres.filter(m=>m.restaurant_id==resId);
   $('f-membre').innerHTML='<option value="">—</option>'+l.map(m=>`<option value="${m.id}" ${m.id==v?'selected':''}>${esc(m.nom)}</option>`).join('');
@@ -1103,12 +1125,16 @@ function openItem(id,restoDefaut,catDefaut,opts){
   S.echInit = {hz: it? horizonDe(it.echeance):'', iso: it? (it.echeance||null):null};
   $('f-echeance').innerHTML = optionsHorizon(S.echInit.hz);
   optionsResto($('f-resto'), it? it.restaurant_id : (restoDefaut||S.resto||S.restos[0].id));
+  if(it && it.restaurant_id==null) $('f-resto').value='';
   $('f-cat').innerHTML = CATS.map(c=>`<option value="${c.id}">${c.nom}</option>`).join('');
   $('f-cat').value = it? it.categorie : (catDefaut||'probleme');
   seg('f-prio',   PRIOS.map(p=>({v:p.v,l:p.l})), it? it.priorite:2);
   seg('f-statut', STATUTS.map(s=>({v:s,l:s})),   it? it.statut:'À traiter');
   optionsUser('f-assigne', it? it.assigne_id : null);
-  $('f-prive').value = it? (it.prive?'1':'0') : (opts.prive?'1':'0');
+  $('f-prive').innerHTML = optionsVisibilite(it? visibiliteDe(it) : (opts.prive?'perso':'equipe'),
+                                             it? it.assigne_id : null);
+  $('f-assigne').onchange = ()=>{ const v=$('f-prive').value;
+    $('f-prive').innerHTML = optionsVisibilite(v, $('f-assigne').value? +$('f-assigne').value : null); };
   optionsMembre($('f-resto').value, it? it.membre_id : null);
   $('f-resto').onchange = ()=>optionsMembre($('f-resto').value,null);
   $('b-suppr').style.display = it?'block':'none';
@@ -1131,7 +1157,7 @@ async function saveItem(){
   const titre=$('f-titre').value.trim();
   if(!titre) return toast('Il manque le sujet');
   const row={
-    restaurant_id:+$('f-resto').value,
+    restaurant_id:$('f-resto').value? +$('f-resto').value : null,
     membre_id:$('f-membre').value? +$('f-membre').value : null,
     categorie:$('f-cat').value, titre,
     description:$('f-desc').value.trim()||null,
@@ -1139,7 +1165,7 @@ async function saveItem(){
     responsable:$('f-resp').value.trim()||null,
     echeance:($('f-echeance').value===S.echInit.hz ? S.echInit.iso : dateHorizon($('f-echeance').value)),
     assigne_id:$('f-assigne').value? +$('f-assigne').value : null,
-    prive:$('f-prive').value==='1',
+    prive:$('f-prive').value!=='equipe',
     actions:S.actions, updated_at:new Date().toISOString()
   };
   if(!S.editItem) row.auteur_id = S.moi? S.moi.id : null;
