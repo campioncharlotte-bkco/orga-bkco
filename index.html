@@ -547,7 +547,9 @@ const restosVus    = ()=> { const p=perimetre(); return p? S.restos.filter(r=>p.
 const dansPerimetre= i => { const p=perimetre();
   return !p || i.restaurant_id==null || p.includes(i.restaurant_id)
       || i.assigne_id==S.moi.id || i.auteur_id==S.moi.id; };
-const perso        = i => i.prive && !i.assigne_id;
+/* Personnel = restreint sans destinataire, ou que l'on s'est confié à soi-même.
+   « Je dois terminer ce dossier » ne regarde que son auteur. */
+const perso        = i => i.prive && (!i.assigne_id || i.assigne_id==i.auteur_id);
 const pourMoi      = i => !i.prive
   || (S.moi && (i.auteur_id==S.moi.id || i.assigne_id==S.moi.id))
   || (estAdmin() && !!i.assigne_id);   // la direction voit tout, sauf le perso des autres
@@ -704,7 +706,7 @@ function reglesVisibilite(sujets,texte){
   sujets.forEach(s=>{
     if(s.categorie==='perso'){ s.prive=true; s.assigne_id=null; s.restaurant_id=null; return; }
     if(ouvert){ s.prive=false; return; }
-    if(s.assigne_id && !(S.moi && s.assigne_id==S.moi.id)) s.prive=true;
+    if(s.assigne_id) s.prive=true;   // à quelqu'un : à deux ; à soi-même : pour soi
   });
   return sujets;
 }
@@ -1214,7 +1216,8 @@ function optionsResto(sel,v,sansResto){
     +restosVus().map(r=>`<option value="${r.id}" ${r.id==v?'selected':''}>${esc(r.nom)}</option>`).join('');
 }
 function optionsVisibilite(val,assigne){
-  const a=nomUser(assigne);
+  const a=(S.moi && assigne==S.moi.id)? null : nomUser(assigne);
+  if(!a && val==='duo') val='perso';
   return `<option value="equipe" ${val==='equipe'?'selected':''}>Toute l'équipe</option>`
     + (a?`<option value="duo" ${val==='duo'?'selected':''}>${esc(a)} et moi${estAdmin()?' seulement':' (+ direction)'}</option>`:'')
     + `<option value="perso" ${val==='perso'?'selected':''}>Moi seule</option>`;
