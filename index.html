@@ -159,7 +159,7 @@ a{color:var(--navy)}
 .carte input.ct:focus{outline:none;border-bottom:1px solid var(--orange)}
 .carte .who{font-size:12px;color:var(--navy);font-weight:500;margin-bottom:9px}
 .carte .grid{display:grid;grid-template-columns:1fr 1fr;gap:7px}
-.carte select,.carte input[type=date]{background:var(--paper);border:1px solid var(--line);border-radius:9px;
+.carte select,.carte input.dt{background:var(--paper);border:1px solid var(--line);border-radius:9px;
   padding:8px 9px;font-size:13px;width:100%}
 .carte .doute{border-color:var(--orange);background:var(--orange-pale)}
 .carte .acts2{display:flex;gap:7px;margin-top:11px}
@@ -322,7 +322,7 @@ textarea{min-height:84px;resize:vertical;font-size:15px;line-height:1.5}
   <input id="f-titre" placeholder="Ex : Friteuse 2 en panne">
   <div class="row">
     <div><label>Restaurant</label><select id="f-resto"></select></div>
-    <div><label>Échéance</label><input id="f-echeance" type="date"></div>
+    <div><label>À traiter</label><select id="f-echeance"></select></div>
   </div>
   <label>Catégorie</label>
   <select id="f-cat"></select>
@@ -390,8 +390,8 @@ const esc = s => (s==null?'':s.toString()).replace(/[&<>"]/g,c=>({'&':'&amp;','<
 /* ============================================================
    1. CONFIGURATION
    ============================================================ */
-const SUPABASE_URL = 'https://goqauyalsiqtmcbyjdre.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdvcWF1eWFsc2lxdG1jYnlqZHJlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgyNTA2ODIsImV4cCI6MjEwMzgyNjY4Mn0.sCRfbjUvYPKJxzUHG7lsitesgiBHwRtMmpVvAjd_CZQ';
+const SUPABASE_URL = 'https://XXXXXXXXXXXX.supabase.co';
+const SUPABASE_KEY = 'eyJXXXXXXXXXXXX';
 const PIN_SECOURS  = '1234';
 const API_PARSE    = '/api/parse';   // fonction Vercel ; si absente, analyse locale
 
@@ -448,7 +448,7 @@ async function dbDelete(t,id){
    ============================================================ */
 let S = {moi:null,users:[],restos:[],membres:[],items:[],view:'pilotage',resto:null,tab:'apercu',tabMoi:'perso',
          filtreCat:'tout',filtreStatut:'ouvert',editItem:null,editMembre:null,editResto:null,
-         actions:[],chat:[],cid:0};
+         actions:[],chat:[],cid:0,echInit:{hz:'',iso:null}};
 
 /* ============================================================
    5. ORDRE DE TRAITEMENT
@@ -671,6 +671,28 @@ function nettoie(s){
   };
 }
 
+/* Échéances par horizon : on ne saisit pas une date, on choisit un délai.
+   La date réelle est calculée derrière pour que retards et tri fonctionnent. */
+const HORIZONS=[['','Sans échéance'],['jour',"Dans la journée"],['semaine','Cette semaine'],['mois','Ce mois-ci']];
+function jourISO(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function dateHorizon(hz){
+  const d=new Date(); d.setHours(0,0,0,0);
+  if(hz==='jour')    return jourISO(d);
+  if(hz==='semaine'){ d.setDate(d.getDate()+((7-d.getDay())%7)); return jourISO(d); }   // dimanche
+  if(hz==='mois')     return jourISO(new Date(d.getFullYear(),d.getMonth()+1,0));       // fin du mois
+  return null;
+}
+function horizonDe(v){
+  if(!v) return '';
+  const j=jours(v);
+  if(j===null||j<=0) return 'jour';
+  if(v<=dateHorizon('semaine')) return 'semaine';
+  return 'mois';
+}
+function optionsHorizon(v){
+  return HORIZONS.map(([k,l])=>`<option value="${k}" ${k===v?'selected':''}>${l}</option>`).join('');
+}
+
 /* ============================================================
    7. ÉCRAN CAPTURE
    ============================================================ */
@@ -705,7 +727,9 @@ function carteHTML(m,i){
       <select onchange="majCarte(${i},'priorite',this.value)">
         ${PRIOS.map(p=>`<option value="${p.v}" ${p.v==s.priorite?'selected':''}>${p.l}</option>`).join('')}
       </select>
-      <input type="date" class="${d('echeance')}" value="${s.echeance||''}" onchange="majCarte(${i},'echeance',this.value)">
+      <select class="${d('echeance')}" onchange="majCarte(${i},'echeance',this.value)">
+        ${optionsHorizon(horizonDe(s.echeance))}
+      </select>
       <select onchange="majCarte(${i},'assigne_id',this.value)">
         <option value="">Personne assignée</option>
         ${S.users.map(u=>`<option value="${u.id}" ${u.id==s.assigne_id?'selected':''}>Pour ${esc(u.nom)}</option>`).join('')}
@@ -726,7 +750,7 @@ function majCarte(i,champ,val){
   if(champ==='priorite'||champ==='restaurant_id') val=+val;
   if(champ==='assigne_id') val=val?+val:null;
   if(champ==='prive') val=(val==='1'||val===true);
-  if(champ==='echeance') val=val||null;
+  if(champ==='echeance') val=dateHorizon(val);
   m.s[champ]=val;
   if(m.s.incertain) m.s.incertain=m.s.incertain.filter(c=>!(champ.startsWith(c)||c.startsWith(champ.replace('_id',''))));
   renderChat();
@@ -1037,7 +1061,8 @@ function openItem(id,restoDefaut,catDefaut,opts){
   $('f-titre').value    = it? it.titre||'' : '';
   $('f-desc').value     = it? it.description||'' : '';
   $('f-resp').value     = it? it.responsable||'' : '';
-  $('f-echeance').value = it? it.echeance||'' : '';
+  S.echInit = {hz: it? horizonDe(it.echeance):'', iso: it? (it.echeance||null):null};
+  $('f-echeance').innerHTML = optionsHorizon(S.echInit.hz);
   optionsResto($('f-resto'), it? it.restaurant_id : (restoDefaut||S.resto||S.restos[0].id));
   $('f-cat').innerHTML = CATS.map(c=>`<option value="${c.id}">${c.nom}</option>`).join('');
   $('f-cat').value = it? it.categorie : (catDefaut||'probleme');
@@ -1073,7 +1098,7 @@ async function saveItem(){
     description:$('f-desc').value.trim()||null,
     priorite:+segVal('f-prio'), statut:segVal('f-statut'),
     responsable:$('f-resp').value.trim()||null,
-    echeance:$('f-echeance').value||null,
+    echeance:($('f-echeance').value===S.echInit.hz ? S.echInit.iso : dateHorizon($('f-echeance').value)),
     assigne_id:$('f-assigne').value? +$('f-assigne').value : null,
     prive:$('f-prive').value==='1',
     actions:S.actions, updated_at:new Date().toISOString()
