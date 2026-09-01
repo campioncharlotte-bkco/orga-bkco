@@ -483,7 +483,7 @@ async function dbDelete(t,id){
    4. ÉTAT
    ============================================================ */
 let S = {moi:null,users:[],tousUsers:[],editUser:null,restos:[],membres:[],items:[],view:'pilotage',resto:null,tab:'apercu',tabMoi:'perso',
-         filtreCat:'tout',filtreStatut:'ouvert',pilot:'bkco',editItem:null,editMembre:null,editResto:null,
+         filtreCat:'tout',filtreStatut:'ouvert',pilot:'bkco',voirFaits:false,editItem:null,editMembre:null,editResto:null,
          actions:[],chat:[],cid:0,echInit:{hz:'',iso:null}};
 
 /* ============================================================
@@ -977,10 +977,26 @@ function lotPilotage(liste){
   return S.pilot==='bkco' ? liste.filter(niveauBKCO) : liste.filter(i=>!niveauBKCO(i));
 }
 const pilotPrive = ()=> S.pilot==='pro' || S.pilot==='perso';
-function setPilot(v){ S.pilot=v; renderPilotage(); window.scrollTo(0,0); }
+function setPilot(v){ S.pilot=v; S.voirFaits=false; renderPilotage(); window.scrollTo(0,0); }
+function basculeFaits(){ S.voirFaits=!S.voirFaits; renderPilotage(); }
+/* Les sujets traités du périmètre affiché, du plus récemment clos au plus ancien. */
+function faitsDuLot(){
+  const base = pilotPrive()? S.items : visibles();
+  return lotPilotage(base.filter(i=>i.statut==='Fait'))
+    .sort((a,b)=>new Date(b.date_cloture||0)-new Date(a.date_cloture||0));
+}
 function ordreParPersonne(nom){ S.filtreCat='tout'; S.filtreStatut='ouvert'; go('ordre');
   $('q').value=nom; renderOrdre(); }
 
+function blocFaits(){
+  const f=faitsDuLot();
+  if(!f.length) return '';
+  let s=`<div class="section-h"><h2>Traités</h2><span>${f.length}</span>
+    <button class="tab" style="margin-left:auto" onclick="basculeFaits()">${S.voirFaits?'Masquer':'Voir'}</button></div>`;
+  if(S.voirFaits) s += f.slice(0,20).map(it=>ligneItem(it)).join('')
+    + (f.length>20? `<div class="muted">Les ${f.length-20} plus anciens sont dans l'onglet Priorités, filtre Traités.</div>`:'');
+  return s;
+}
 function renderPilotage(){
   /* le perso est exclu de visibles(), on repart donc de S.items pour cet onglet */
   const base = pilotPrive() ? S.items.filter(i=>i.statut!=='Fait') : ouverts();
@@ -1007,6 +1023,7 @@ function renderPilotage(){
                             : "Ta vie hors restaurants, visible de toi seule"}</div>`);
 
   if(pilotPrive()){
+    html += blocFaits();
     html += S.pilot==='pro'
       ? `<button class="btn sec" onclick="openItem(null,null,'organisation',{prive:true})">Ajouter une tâche pro</button>`
       : `<button class="btn sec" onclick="openItem(null,null,'perso',{prive:true})">Ajouter une tâche personnelle</button>`;
@@ -1038,6 +1055,7 @@ function renderPilotage(){
       <span class="bubble n">${l.length}</span></span></button>`;
   }).join('') || `<div class="empty">Aucun sujet rattaché à un restaurant</div>`;
 
+  html += blocFaits();
   html += `<button class="btn sec" onclick="openItem()">Ajouter un sujet</button>`;
   if(S.pilot==='restos')
     html += `<div class="muted" style="margin-top:8px">Assigne-le à un directeur pour qu'il apparaisse dans cet onglet.</div>`;
