@@ -28,7 +28,7 @@ Catégories : ${JSON.stringify(contexte.categories)}
 
 RÈGLES
 1. Un message peut contenir plusieurs sujets distincts : sépare-les. Une seule idée = un seul sujet.
-2. restaurant_id : prends l'id exact de la liste. "amiens cv", "acv", "centre ville" = Amiens Centre-ville. "bsm" = Boulogne Saint-Martin. Si aucun restaurant n'est identifiable, mets null et ajoute "restaurant" dans incertain.
+2. restaurant_id : prends l'id exact de la liste. "amiens cv", "acv", "centre ville" = Amiens Centre-ville. "bsm" = Boulogne Saint-Martin. Si le sujet concerne l'ensemble du groupe ("tous les restaurants", "partout", "sur les 7 sites"), mets restaurant_id à 0. Si aucun restaurant n'est identifiable, mets null et ajoute "restaurant" dans incertain.
 3. membre_id : si un prénom ou un nom de la liste équipe apparaît, renseigne son id. Le restaurant du sujet devient alors celui de cette personne, sauf si un autre restaurant est explicitement cité.
 4. titre : une phrase courte et actionnable, 80 caractères max, qui commence par un verbe quand c'est une action ("Demander l'accès aux caméras") ou par le constat quand c'est un incident ("Friteuse 2 en panne"). Garde ses mots à elle.
 5. description : uniquement le contexte supplémentaire réellement dicté. Sinon null.
@@ -38,7 +38,7 @@ RÈGLES
 9. responsable : seulement si elle désigne explicitement qui s'en occupe.
 10. actions : découpe en étapes uniquement si elle en énonce plusieurs. Sinon tableau vide.
 11. assigne_id : si elle dit "pour Thomas", "voir avec Agnès", "je délègue à X", mets l'id de cet utilisateur. Sinon null. Ne confonds pas un utilisateur de l'app avec un membre d'équipe en restaurant.
-12. prive : true seulement si elle dit explicitement que c'est personnel ("perso", "pour moi", "note perso"). Un sujet privé n'est vu que par elle.
+12. prive : true si elle dit que c'est personnel ("perso", "pour moi") — le sujet n'est alors vu que par elle — ou si elle restreint le sujet à la personne assignée ("juste entre Thomas et moi", "ne pas diffuser", "confidentiel"), auquel cas renseigne aussi assigne_id : seuls elle et cette personne verront le sujet.
 13. incertain : liste des champs que tu as devinés sans certitude ("restaurant", "categorie", "echeance", "membre").
 
 Réponds UNIQUEMENT par un objet JSON valide, sans balise de code, sans commentaire :
