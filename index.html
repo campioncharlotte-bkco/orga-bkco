@@ -982,12 +982,6 @@ function renderPilotage(){
       <span class="bubble n">${l.length}</span></span></button>`;
   }).join('') || `<div class="empty">Aucun sujet rattaché à un restaurant</div>`;
 
-  html += `<div class="section-h"><h2>Par sujet</h2></div><div class="cats">`
-    + CATS_RESTO.map(c=>{ const n=ouv.filter(i=>i.categorie===c.id).length;
-      return `<button class="cat ${n?'':'zero'}" onclick="ordreParCat('${c.id}')">
-        <span class="g" style="color:${n?'var(--navy)':'var(--ink-3)'}">${c.g}</span>
-        <span class="n">${c.nom}</span><span class="c">${n}</span></button>`; }).join('')
-    + `</div>`;
   $('pilotage-corps').innerHTML = html;
 }
 function renderRestos(){
