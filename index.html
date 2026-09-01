@@ -666,6 +666,8 @@ function analyseLocale(texte){
        « voir avec Thomas », « Agnès doit relancer ». Le prénom d'un compte
        cité dans la phrase suffit — sauf le sien. */
     let assigne=null, alen=0;
+    if(S.moi && /(^| )(je dois|il faut que je|je pense a|je m en occupe|a faire par moi)( |$)/.test(t))
+      assigne=S.moi.id;
     S.users.forEach(u=>{
       if(S.moi && u.id==S.moi.id) return;
       const n=norm(u.nom).split(' ')[0];
@@ -678,7 +680,10 @@ function analyseLocale(texte){
     if(!resto && membre) resto = membre.restaurant_id;
     if(prive) resto=null;
     else if(/tous les restaurants|tous les sites|partout|les 7 restaurants|tout le groupe/.test(t)) resto=null;
-    else if(!resto){ const rv=restosVus(); resto = rv.length?rv[0].id:null; if(rv.length>1) doute.push('restaurant'); }
+    else if(!resto){ const rv=restosVus();
+      /* Un seul restaurant au périmètre : aucune ambiguïté. Sinon on laisse
+         « Tous les restaurants » plutôt que d'inventer un site au hasard. */
+      if(rv.length===1) resto=rv[0].id; else { resto=null; doute.push('restaurant'); } }
     const cat = prive? 'perso' : detectCat(t);
     if(cat==='organisation') doute.push('categorie');
     let titre = bout.trim().replace(/^./,c=>c.toUpperCase());
@@ -731,8 +736,9 @@ function nettoie(s){
   let resto = ok(s.restaurant_id)? s.restaurant_id : null;
   const membre = S.membres.find(m=>m.id==s.membre_id)||null;
   if(!resto && membre) resto = membre.restaurant_id;
-  if(!resto && !tous){ const rv=restosVus(); resto = rv.length?rv[0].id:null;
-    if(rv.length>1 && !doute.includes('restaurant')) doute.push('restaurant'); }
+  if(!resto && !tous){ const rv=restosVus();
+    if(rv.length===1) resto=rv[0].id;
+    else if(!doute.includes('restaurant')) doute.push('restaurant'); }
   if(tous) resto=null;
   if(s.prive===true && !s.assigne_id) resto=null;   // tâche personnelle : aucun restaurant
   return {
@@ -848,12 +854,13 @@ async function ranger(i){
     const n=await dbInsert('orga_items',s);
     S.items.push(n);
     const rang=rangDansFile(n.id);
-    const dest = n.prive ? 'Rangé dans <b>tes tâches personnelles</b>'
+    const dest = perso(n) ? 'Rangé dans <b>tes tâches personnelles</b>'
       : `Rangé dans <b>${esc(nomResto(n.restaurant_id))}</b> · ${CAT[n.categorie].nom}`;
     const pour = nomUser(n.assigne_id);
     S.chat[i]={role:'app',fait:true,
       html: dest + (pour?` · assigné à <b>${esc(pour)}</b>`:'') +
-        (n.prive?'' : `<br>Position <b>${rang}</b> sur ${ouverts().length} dans la file commune.`)};
+        (perso(n)?'' : `<br>Position <b>${rang}</b> sur ${ouverts().length} dans la file`
+          + (n.prive?' partagée.':' commune.'))};
     renderChat(); render();
   }catch(e){ toast('Erreur : '+e.message); }
 }
