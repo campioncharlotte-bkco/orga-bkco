@@ -707,6 +707,7 @@ function reglesVisibilite(sujets,texte){
     if(s.categorie==='perso'){ s.prive=true; s.assigne_id=null; s.restaurant_id=null; return; }
     if(ouvert){ s.prive=false; return; }
     if(s.assigne_id) s.prive=true;   // à quelqu'un : à deux ; à soi-même : pour soi
+    if(S.moi && s.assigne_id==S.moi.id){ s.restaurant_id=null; s.incertain=[]; }
   });
   return sujets;
 }
@@ -799,18 +800,20 @@ function renderChat(){
   }).join('');
   window.scrollTo({top:document.body.scrollHeight,behavior:'smooth'});
 }
+const carteEstPerso = s => s.prive && (!s.assigne_id || (S.moi && s.assigne_id==S.moi.id));
 function carteHTML(m,i){
   const s=m.s;
+  const pp=carteEstPerso(s);
   const membre = S.membres.find(x=>x.id==s.membre_id);
   const d = c => s.incertain && s.incertain.includes(c) ? 'doute' : '';
   return `<div class="carte">
     <input class="ct" value="${esc(s.titre)}" onchange="majCarte(${i},'titre',this.value)">
     ${membre?`<div class="who">${esc(membre.nom)} · ${esc(membre.poste||'')} · ${esc(nomResto(membre.restaurant_id))}</div>`:''}
     <div class="grid">
-      <select class="${d('restaurant')}" onchange="majCarte(${i},'restaurant_id',this.value)">
-        <option value="" ${s.restaurant_id==null?'selected':''}>${s.categorie==='perso'?'Sans restaurant':'Tous les restaurants'}</option>
+      ${pp?'':`<select class="${d('restaurant')}" onchange="majCarte(${i},'restaurant_id',this.value)">
+        <option value="" ${s.restaurant_id==null?'selected':''}>Tous les restaurants</option>
         ${restosVus().map(r=>`<option value="${r.id}" ${r.id==s.restaurant_id?'selected':''}>${esc(r.nom)}</option>`).join('')}
-      </select>
+      </select>`}
       <select class="${d('categorie')}" onchange="majCarte(${i},'categorie',this.value)">
         ${CATS.map(c=>`<option value="${c.id}" ${c.id===s.categorie?'selected':''}>${c.nom}</option>`).join('')}
       </select>
@@ -820,10 +823,10 @@ function carteHTML(m,i){
       <select class="${d('echeance')}" onchange="majCarte(${i},'echeance',this.value)">
         ${optionsHorizon(horizonDe(s.echeance))}
       </select>
-      <select onchange="majCarte(${i},'assigne_id',this.value)">
+      ${pp?'':`<select onchange="majCarte(${i},'assigne_id',this.value)">
         <option value="">Personne assignée</option>
         ${S.users.map(u=>`<option value="${u.id}" ${u.id==s.assigne_id?'selected':''}>Pour ${esc(u.nom)}</option>`).join('')}
-      </select>
+      </select>`}
       <select onchange="majCarte(${i},'prive',this.value)">
         ${optionsVisibilite(!s.prive?'equipe':(s.assigne_id?'duo':'perso'), s.assigne_id)}
       </select>
@@ -839,8 +842,9 @@ function majCarte(i,champ,val){
   if(champ==='priorite') val=+val;
   if(champ==='restaurant_id') val=val===''?null:+val;
   if(champ==='assigne_id') val=val?+val:null;
-  if(champ==='prive'){ if(val==='perso'){ m.s.assigne_id=null; val=true; }
-                       else val=(val==='duo'); }
+  if(champ==='prive'){
+    if(val==='perso'){ m.s.assigne_id=S.moi?S.moi.id:null; m.s.restaurant_id=null; val=true; }
+    else val=(val==='duo'); }
   if(champ==='echeance') val=dateHorizon(val);
   m.s[champ]=val;
   if(m.s.incertain) m.s.incertain=m.s.incertain.filter(c=>!(champ.startsWith(c)||c.startsWith(champ.replace('_id',''))));
@@ -852,6 +856,7 @@ async function ranger(i){
   const s={...m.s}; delete s.incertain;
   s.updated_at=new Date().toISOString();
   s.auteur_id = S.moi? S.moi.id : null;
+  if(carteEstPerso(s)){ s.restaurant_id=null; s.membre_id=null; }
   try{
     const n=await dbInsert('orga_items',s);
     S.items.push(n);
@@ -955,26 +960,30 @@ function roleDe(id){ const u=S.users.find(x=>x.id==id); return u?(u.role||''):''
    « Directrice » ne matchent pas « direction » et restent au niveau terrain. */
 const estSupervision = r => /direction|supervis|admin|franchis/i.test(r||'');
 const niveauBKCO = i => !i.assigne_id || estSupervision(roleDe(i.assigne_id));
+const aMoi = i => perso(i) && i.auteur_id==S.moi.id;
 function lotPilotage(liste){
-  if(S.pilot==='perso') return liste.filter(i=>perso(i) && i.auteur_id==S.moi.id);
+  if(S.pilot==='pro')   return liste.filter(i=>aMoi(i) && i.categorie!=='perso');
+  if(S.pilot==='perso') return liste.filter(i=>aMoi(i) && i.categorie==='perso');
   return S.pilot==='bkco' ? liste.filter(niveauBKCO) : liste.filter(i=>!niveauBKCO(i));
 }
+const pilotPrive = ()=> S.pilot==='pro' || S.pilot==='perso';
 function setPilot(v){ S.pilot=v; renderPilotage(); window.scrollTo(0,0); }
 function ordreParPersonne(nom){ S.filtreCat='tout'; S.filtreStatut='ouvert'; go('ordre');
   $('q').value=nom; renderOrdre(); }
 
 function renderPilotage(){
   /* le perso est exclu de visibles(), on repart donc de S.items pour cet onglet */
-  const base = S.pilot==='perso' ? S.items.filter(i=>i.statut!=='Fait') : ouverts();
+  const base = pilotPrive() ? S.items.filter(i=>i.statut!=='Fait') : ouverts();
   const ouv = lotPilotage(base);
   $('pilot-tabs').innerHTML =
     `<button class="tab ${S.pilot==='bkco'?'on':''}" onclick="setPilot('bkco')">Point BKCO</button>
      <button class="tab ${S.pilot==='restos'?'on':''}" onclick="setPilot('restos')">Point restos</button>
+     <button class="tab ${S.pilot==='pro'?'on':''}" onclick="setPilot('pro')">Point pro</button>
      <button class="tab ${S.pilot==='perso'?'on':''}" onclick="setPilot('perso')">Point perso</button>`;
   $('k-ouv').textContent  = ouv.length;
   $('k-ret').textContent  = ouv.filter(i=>{const j=jours(i.echeance);return j!==null&&j<0;}).length;
   $('k-p1').textContent   = ouv.filter(i=>i.priorite==1).length;
-  $('k-fait').textContent = lotPilotage(S.pilot==='perso'?S.items:visibles())
+  $('k-fait').textContent = lotPilotage(pilotPrive()?S.items:visibles())
                               .filter(i=>i.statut==='Fait'&&i.date_cloture&&
                               (Date.now()-new Date(i.date_cloture))<30*86400000).length;
 
@@ -983,11 +992,14 @@ function renderPilotage(){
     + (top.length ? top.map((it,k)=>ligneItem(it,k+1)).join('')
       : `<div class="empty"><b>Rien en attente</b>${
           S.pilot==='bkco'  ? "Les sujets que la supervision doit traiter arrivent ici" :
-          S.pilot==='perso' ? "Tes tâches personnelles arrivent ici, visibles de toi seule"
-                            : "Les sujets confiés aux directeurs arrivent ici"}</div>`);
+          S.pilot==='restos'? "Les sujets confiés aux directeurs arrivent ici" :
+          S.pilot==='pro'   ? "Ton travail de fond, visible de toi seule"
+                            : "Ta vie hors restaurants, visible de toi seule"}</div>`);
 
-  if(S.pilot==='perso'){
-    html += `<button class="btn sec" onclick="openItem(null,null,'perso',{prive:true})">Ajouter une tâche personnelle</button>`;
+  if(pilotPrive()){
+    html += S.pilot==='pro'
+      ? `<button class="btn sec" onclick="openItem(null,null,'organisation',{prive:true})">Ajouter une tâche pro</button>`
+      : `<button class="btn sec" onclick="openItem(null,null,'perso',{prive:true})">Ajouter une tâche personnelle</button>`;
     $('pilotage-corps').innerHTML = html; return;
   }
 
@@ -1184,7 +1196,9 @@ function render(){
     bienvenue(); renderChat(); }
   if(S.view==='pilotage'){ $('title').textContent='Le Point';
     const o=lotPilotage(ouverts()).length;
-    $('subtitle').innerHTML=(S.pilot==='bkco'?'Traité par la supervision':'Confié aux directeurs')
+    $('subtitle').innerHTML=(S.pilot==='bkco'?'Traité par la supervision':
+                             S.pilot==='restos'?'Confié aux directeurs':
+                             S.pilot==='pro'?'Mon travail de fond':'Ma vie hors restaurants')
       +`<br>${o} sujet${o>1?'s':''} ouvert${o>1?'s':''}`;
     renderPilotage(); }
   if(S.view==='restos'){ $('title').textContent='Restaurants'; $('subtitle').innerHTML=''; renderRestos(); }
