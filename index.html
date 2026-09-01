@@ -552,7 +552,9 @@ const dansPerimetre= i => { const p=perimetre();
   return !p || i.restaurant_id==null || p.includes(i.restaurant_id)
       || i.assigne_id==S.moi.id || i.auteur_id==S.moi.id; };
 const perso        = i => i.prive && !i.assigne_id;
-const pourMoi      = i => !i.prive || (S.moi && (i.auteur_id==S.moi.id || i.assigne_id==S.moi.id));
+const pourMoi      = i => !i.prive
+  || (S.moi && (i.auteur_id==S.moi.id || i.assigne_id==S.moi.id))
+  || (estAdmin() && !!i.assigne_id);   // la direction voit tout, sauf le perso des autres
 const visibles     = ()=> S.items.filter(i=>pourMoi(i) && dansPerimetre(i) && !perso(i));
 /* Un sujet sans restaurant concerne tous les restaurants. */
 const concerne     = (i,rid) => i.restaurant_id==null || i.restaurant_id==rid;
@@ -1141,7 +1143,7 @@ function optionsResto(sel,v,sansResto){
 function optionsVisibilite(val,assigne){
   const a=nomUser(assigne);
   return `<option value="equipe" ${val==='equipe'?'selected':''}>Toute l'équipe</option>`
-    + (a?`<option value="duo" ${val==='duo'?'selected':''}>${esc(a)} et moi seulement</option>`:'')
+    + (a?`<option value="duo" ${val==='duo'?'selected':''}>${esc(a)} et moi${estAdmin()?' seulement':' (+ direction)'}</option>`:'')
     + `<option value="perso" ${val==='perso'?'selected':''}>Moi seule</option>`;
 }
 const visibiliteDe = i => !i.prive ? 'equipe' : (i.assigne_id? 'duo':'perso');
