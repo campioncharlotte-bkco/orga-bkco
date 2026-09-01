@@ -279,18 +279,14 @@ textarea{min-height:84px;resize:vertical;font-size:15px;line-height:1.5}
 
   <!-- ══════════ PILOTAGE ══════════ -->
   <section class="screen on" id="s-pilotage">
+    <div class="tabs" id="pilot-tabs"></div>
     <div class="kpis">
       <div class="kpi"><div class="n" id="k-ouv">0</div><div class="l">Ouverts</div></div>
       <div class="kpi a"><div class="n" id="k-ret">0</div><div class="l">En retard</div></div>
       <div class="kpi w"><div class="n" id="k-p1">0</div><div class="l">Critiques</div></div>
       <div class="kpi o"><div class="n" id="k-fait">0</div><div class="l">Traités 30j</div></div>
     </div>
-    <div class="section-h"><h2>À traiter aujourd'hui</h2><span>par ordre de priorité</span></div>
-    <div id="top-list"></div>
-    <div class="section-h"><h2>Par restaurant</h2></div>
-    <div id="pil-restos"></div>
-    <div class="section-h"><h2>Par sujet</h2></div>
-    <div class="cats" id="pil-cats"></div>
+    <div id="pilotage-corps"></div>
   </section>
 
   <!-- ══════════ RESTAURANTS ══════════ -->
@@ -487,7 +483,7 @@ async function dbDelete(t,id){
    4. ÉTAT
    ============================================================ */
 let S = {moi:null,users:[],tousUsers:[],editUser:null,restos:[],membres:[],items:[],view:'pilotage',resto:null,tab:'apercu',tabMoi:'perso',
-         filtreCat:'tout',filtreStatut:'ouvert',editItem:null,editMembre:null,editResto:null,
+         filtreCat:'tout',filtreStatut:'ouvert',pilot:'bkco',editItem:null,editMembre:null,editResto:null,
          actions:[],chat:[],cid:0,echInit:{hz:'',iso:null}};
 
 /* ============================================================
@@ -927,31 +923,70 @@ function ligneItem(it,rang){
       </span>
     </span></button>`;
 }
+/* Deux pilotages, séparés par le niveau qui traite le sujet :
+   - « BKCO »  : ce qui est sur la table de la supervision (direction, superviseurs)
+                 ou pas encore attribué ;
+   - « Restos » : ce qui a été délégué au terrain (directeurs, managers). */
+function roleDe(id){ const u=S.users.find(x=>x.id==id); return u?(u.role||''):''; }
+const estSupervision = r => /direction|superviseur|admin/i.test(r||'');
+const niveauBKCO = i => !i.assigne_id || estSupervision(roleDe(i.assigne_id));
+function lotPilotage(liste){
+  return S.pilot==='bkco' ? liste.filter(niveauBKCO) : liste.filter(i=>!niveauBKCO(i));
+}
+function setPilot(v){ S.pilot=v; renderPilotage(); window.scrollTo(0,0); }
+function ordreParPersonne(nom){ S.filtreCat='tout'; S.filtreStatut='ouvert'; go('ordre');
+  $('q').value=nom; renderOrdre(); }
+
 function renderPilotage(){
-  const ouv = ouverts();
+  const ouv = lotPilotage(ouverts());
+  $('pilot-tabs').innerHTML =
+    `<button class="tab ${S.pilot==='bkco'?'on':''}" onclick="setPilot('bkco')">Pilotage BKCO</button>
+     <button class="tab ${S.pilot==='restos'?'on':''}" onclick="setPilot('restos')">Pilotage restos</button>`;
   $('k-ouv').textContent  = ouv.length;
   $('k-ret').textContent  = ouv.filter(i=>{const j=jours(i.echeance);return j!==null&&j<0;}).length;
   $('k-p1').textContent   = ouv.filter(i=>i.priorite==1).length;
-  $('k-fait').textContent = visibles().filter(i=>i.statut==='Fait'&&i.date_cloture&&
+  $('k-fait').textContent = lotPilotage(visibles()).filter(i=>i.statut==='Fait'&&i.date_cloture&&
                               (Date.now()-new Date(i.date_cloture))<30*86400000).length;
-  const top = trie(ouv).slice(0,6);
-  $('top-list').innerHTML = top.length
-    ? top.map((it,i)=>ligneItem(it,i+1)).join('')
-    : `<div class="empty"><b>Rien en attente</b>Note un sujet depuis l'écran Talk to me</div>`;
-  $('pil-restos').innerHTML = restosVus().map(r=>{
+
+  const top=trie(ouv).slice(0,6);
+  let html = `<div class="section-h"><h2>À traiter aujourd'hui</h2><span>par ordre de priorité</span></div>`
+    + (top.length ? top.map((it,k)=>ligneItem(it,k+1)).join('')
+      : `<div class="empty"><b>Rien en attente</b>${S.pilot==='bkco'
+          ? "Les sujets que la supervision doit traiter arrivent ici"
+          : "Les sujets confiés aux directeurs arrivent ici"}</div>`);
+
+  html += `<div class="section-h"><h2>Par personne</h2><span>qui doit agir</span></div>`;
+  const lignes=S.users.map(u=>{
+    const l=ouv.filter(i=>i.assigne_id==u.id);
+    return {nom:u.nom, role:u.role||'', n:l.length,
+            urg:l.filter(i=>i.priorite==1||(jours(i.echeance)!==null&&jours(i.echeance)<0)).length};
+  }).filter(x=>x.n>0).sort((a,b)=>b.n-a.n);
+  const sans=ouv.filter(i=>!i.assigne_id).length;
+  html += lignes.map(x=>`<button class="resto" onclick="ordreParPersonne('${esc(x.nom)}')">
+      <span><span class="nm">${esc(x.nom)}</span><br><span class="zn">${esc(x.role)}</span></span>
+      <span class="cnt">${x.urg?`<span class="bubble a">${x.urg}</span>`:''}
+      <span class="bubble n">${x.n}</span></span></button>`).join('');
+  if(sans) html += `<div class="muted" style="margin-top:6px">${sans} sujet${sans>1?'s':''} sans personne assignée</div>`;
+  if(!lignes.length && !sans) html += `<div class="empty">Aucun sujet à ce niveau</div>`;
+
+  html += `<div class="section-h"><h2>Par restaurant</h2></div>`;
+  html += restosVus().map(r=>{
     const l=ouv.filter(i=>concerne(i,r.id));
+    if(!l.length) return '';
     const urg=l.filter(i=>i.priorite==1||(jours(i.echeance)!==null&&jours(i.echeance)<0)).length;
     return `<button class="resto" onclick="openResto2(${r.id})">
       <span><span class="nm">${esc(r.nom)}</span><br><span class="zn">${esc(r.zone||'')}</span></span>
       <span class="cnt">${urg?`<span class="bubble a">${urg}</span>`:''}
       <span class="bubble n">${l.length}</span></span></button>`;
-  }).join('') || `<div class="empty"><b>Aucun restaurant</b>Ajoute-les dans l'onglet Restaurants</div>`;
-  $('pil-cats').innerHTML = CATS_RESTO.map(c=>{
-    const n=ouv.filter(i=>i.categorie===c.id).length;
-    return `<button class="cat ${n?'':'zero'}" onclick="ordreParCat('${c.id}')">
-      <span class="g" style="color:${n?'var(--navy)':'var(--ink-3)'}">${c.g}</span>
-      <span class="n">${c.nom}</span><span class="c">${n}</span></button>`;
-  }).join('');
+  }).join('') || `<div class="empty">Aucun sujet rattaché à un restaurant</div>`;
+
+  html += `<div class="section-h"><h2>Par sujet</h2></div><div class="cats">`
+    + CATS_RESTO.map(c=>{ const n=ouv.filter(i=>i.categorie===c.id).length;
+      return `<button class="cat ${n?'':'zero'}" onclick="ordreParCat('${c.id}')">
+        <span class="g" style="color:${n?'var(--navy)':'var(--ink-3)'}">${c.g}</span>
+        <span class="n">${c.nom}</span><span class="c">${n}</span></button>`; }).join('')
+    + `</div>`;
+  $('pilotage-corps').innerHTML = html;
 }
 function renderRestos(){
   const ouv=ouverts();
@@ -1118,7 +1153,9 @@ function render(){
     const o=ouverts().length; $('subtitle').innerHTML=o+' sujet'+(o>1?'s':'')+' ouvert'+(o>1?'s':'');
     bienvenue(); renderChat(); }
   if(S.view==='pilotage'){ $('title').textContent='Pilotage';
-    const o=ouverts().length; $('subtitle').innerHTML=`${restosVus().length} restaurant${restosVus().length>1?'s':''}<br>${o} sujet${o>1?'s':''} ouvert${o>1?'s':''}`;
+    const o=lotPilotage(ouverts()).length;
+    $('subtitle').innerHTML=(S.pilot==='bkco'?'Traité par la supervision':'Confié aux directeurs')
+      +`<br>${o} sujet${o>1?'s':''} ouvert${o>1?'s':''}`;
     renderPilotage(); }
   if(S.view==='restos'){ $('title').textContent='Restaurants'; $('subtitle').innerHTML=''; renderRestos(); }
   if(S.view==='resto')  renderResto();
