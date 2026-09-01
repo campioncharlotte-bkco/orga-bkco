@@ -973,9 +973,13 @@ function roleDe(id){ const u=S.users.find(x=>x.id==id); return u?(u.role||''):''
 const estSupervision = r => /direction|supervis|admin|franchis/i.test(r||'');
 const niveauBKCO = i => !i.assigne_id || estSupervision(roleDe(i.assigne_id));
 const aMoi = i => perso(i) && i.auteur_id==S.moi.id;
+/* Un directeur n'a pas de niveau de supervision au-dessus de lui dans l'app :
+   il voit tout ce qui concerne son restaurant, sans distinction de niveau. */
+const jeSupervise = ()=> estSupervision(S.moi && S.moi.role);
 function lotPilotage(liste){
   if(S.pilot==='pro')   return liste.filter(i=>aMoi(i) && i.categorie!=='perso');
   if(S.pilot==='perso') return liste.filter(i=>aMoi(i) && i.categorie==='perso');
+  if(!jeSupervise())    return liste;
   return S.pilot==='bkco' ? liste.filter(niveauBKCO) : liste.filter(i=>!niveauBKCO(i));
 }
 const pilotPrive = ()=> S.pilot==='pro' || S.pilot==='perso';
@@ -1001,14 +1005,17 @@ function blocFaits(){
   return s;
 }
 function renderPilotage(){
+  if(!jeSupervise() && S.pilot==='bkco') S.pilot='restos';   // onglet réservé à la supervision
   /* le perso est exclu de visibles(), on repart donc de S.items pour cet onglet */
   const base = pilotPrive() ? S.items.filter(i=>i.statut!=='Fait') : ouverts();
   const ouv = lotPilotage(base);
   $('pilot-tabs').innerHTML =
-    `<button class="tab ${S.pilot==='bkco'?'on':''}" onclick="setPilot('bkco')">Point BKCO</button>
-     <button class="tab ${S.pilot==='restos'?'on':''}" onclick="setPilot('restos')">Point restos</button>
-     <button class="tab ${S.pilot==='pro'?'on':''}" onclick="setPilot('pro')">Point pro</button>
-     <button class="tab ${S.pilot==='perso'?'on':''}" onclick="setPilot('perso')">Point perso</button>`;
+    (jeSupervise()
+      ? `<button class="tab ${S.pilot==='bkco'?'on':''}" onclick="setPilot('bkco')">Point BKCO</button>
+         <button class="tab ${S.pilot==='restos'?'on':''}" onclick="setPilot('restos')">Point restos</button>`
+      : `<button class="tab ${S.pilot==='restos'?'on':''}" onclick="setPilot('restos')">Mon restaurant</button>`)
+    + `<button class="tab ${S.pilot==='pro'?'on':''}" onclick="setPilot('pro')">Point pro</button>
+       <button class="tab ${S.pilot==='perso'?'on':''}" onclick="setPilot('perso')">Point perso</button>`;
   $('k-ouv').textContent  = ouv.length;
   $('k-ret').textContent  = ouv.filter(i=>{const j=jours(i.echeance);return j!==null&&j<0;}).length;
   $('k-p1').textContent   = ouv.filter(i=>i.priorite==1).length;
@@ -1035,7 +1042,8 @@ function renderPilotage(){
       : `<div class="empty"><b>Rien ici</b>${
           S.kpi ? "Aucun sujet dans ce filtre" :
           S.pilot==='bkco'  ? "Les sujets que la supervision doit traiter arrivent ici" :
-          S.pilot==='restos'? "Les sujets confiés aux directeurs arrivent ici" :
+          S.pilot==='restos'? (jeSupervise()?"Les sujets confiés aux directeurs arrivent ici"
+                                            :"Les sujets de ton restaurant arrivent ici") :
           S.pilot==='pro'   ? "Ton travail de fond, visible de toi seule"
                             : "Ta vie hors restaurants, visible de toi seule"}</div>`);
 
@@ -1249,7 +1257,7 @@ function render(){
     $('subtitle').innerHTML=''; bienvenue(); renderChat(); }
   if(S.view==='pilotage'){ $('title').textContent='Le Point';
     $('subtitle').innerHTML=(S.pilot==='bkco'?'Traité par la supervision':
-                             S.pilot==='restos'?'Confié aux directeurs':
+                             S.pilot==='restos'?(jeSupervise()?'Confié aux directeurs':'Tout mon périmètre'):
                              S.pilot==='pro'?'Mon travail de fond':'Ma vie hors restaurants');
     renderPilotage(); }
   if(S.view==='restos'){ $('title').textContent='Restaurants'; $('subtitle').innerHTML=''; renderRestos(); }
@@ -1584,6 +1592,7 @@ async function demarrer(){
   $('login').style.display='none';
   try{ if(!SB) lsGet(); await charger(); }
   catch(e){ toast('Chargement impossible : '+e.message); }
+  if(!jeSupervise()) S.pilot='restos';
   go('pilotage');
 }
 /* Synchronisation : les trois comptes voient les ajouts des autres. */
