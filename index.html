@@ -720,16 +720,25 @@ async function analyser(texte){
     moi:S.moi?{id:S.moi.id,nom:S.moi.nom}:null,
     categories:CATS.map(c=>({id:c.id,nom:c.nom}))
   };
-  try{
-    const r=await fetch(API_PARSE,{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({message:texte,contexte})});
-    if(r.ok){
-      const j=await r.json();
-      if(j.sujets && j.sujets.length)
-        return {source:'ia',sujets:reglesVisibilite(j.sujets.map(nettoie),texte)};
-    }
-  }catch(e){}
-  return {source:'local',sujets:reglesVisibilite(analyseLocale(texte),texte)};
+  let err='';
+  /* Deux tentatives : l'API renvoie parfois un 5xx passager. */
+  for(let essai=0; essai<2; essai++){
+    if(essai) await new Promise(r=>setTimeout(r,1200));
+    try{
+      const r=await fetch(API_PARSE,{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({message:texte,contexte})});
+      if(r.ok){
+        const j=await r.json();
+        if(j.sujets && j.sujets.length)
+          return {source:'ia',sujets:reglesVisibilite(j.sujets.map(nettoie),texte)};
+        err='réponse vide du serveur';
+      } else {
+        err='HTTP '+r.status+' — '+(await r.text()).slice(0,160);
+        if(r.status<500) break;          // erreur de configuration : inutile de réessayer
+      }
+    }catch(e){ err='réseau : '+e.message; }
+  }
+  return {source:'local',sujets:reglesVisibilite(analyseLocale(texte),texte),err};
 }
 function nettoie(s){
   const ok = id => S.restos.some(r=>r.id==id);
@@ -882,9 +891,10 @@ async function envoyer(){
   S.chat.pop();
   if(!res.sujets.length){ S.chat.push({role:'app',texte:"Je n'ai pas réussi à en tirer un sujet. Reformule en une phrase."}); }
   else{
-    S.chat.push({role:'app',texte: res.sujets.length>1
-      ? `J'y vois ${res.sujets.length} sujets distincts.`
-      : (res.source==='local' ? 'Voilà ce que j\'en comprends — vérifie les champs orangés.' : 'Voilà ce que j\'en comprends.')});
+    S.chat.push({role:'app',texte: res.source==='local'
+      ? "Analyse hors ligne — vérifie les champs orangés.\n" + (res.err||'')
+      : (res.sujets.length>1 ? `J'y vois ${res.sujets.length} sujets distincts.`
+                             : "Voilà ce que j'en comprends.")});
     res.sujets.forEach(s=>S.chat.push({role:'carte',s}));
   }
   renderChat();
