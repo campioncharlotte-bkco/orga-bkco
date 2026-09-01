@@ -389,6 +389,11 @@ textarea{min-height:84px;resize:vertical;font-size:15px;line-height:1.5}
     </select></div>
     <div><label>Code d'accès</label><input id="u-pin" type="tel" inputmode="numeric" maxlength="6" placeholder="4 chiffres"></div>
   </div>
+  <div class="row">
+    <div><label>Restaurant dirigé</label><select id="u-resto"></select></div>
+    <div><label>Rattaché à</label><select id="u-sup"></select></div>
+  </div>
+  <div class="muted">Un compte avec un restaurant ne voit que ce restaurant. Laisse vide pour un accès à tout le groupe.</div>
   <label>Accès</label>
   <select id="u-actif"><option value="1">Actif</option><option value="0">Désactivé</option></select>
   <div class="muted">Un compte désactivé ne peut plus se connecter, mais tout ce qu'il a noté reste en place.</div>
@@ -533,9 +538,15 @@ function couleur(it){
    - prive = false            -> toute l'équipe
    - prive = true, sans assigné -> l'auteur seul (onglet Moi)
    - prive = true, avec assigné -> l'auteur et la personne assignée */
+/* Périmètre : un compte rattaché à un restaurant ne voit que celui-ci
+   (plus les sujets transverses et ce qui le concerne personnellement). */
+const perimetre    = ()=> (S.moi && S.moi.restaurant_id) ? S.moi.restaurant_id : null;
+const restosVus    = ()=> { const p=perimetre(); return p? S.restos.filter(r=>r.id==p) : S.restos; };
+const dansPerimetre= i => { const p=perimetre();
+  return !p || i.restaurant_id==null || i.restaurant_id==p || i.assigne_id==S.moi.id || i.auteur_id==S.moi.id; };
 const perso        = i => i.prive && !i.assigne_id;
 const pourMoi      = i => !i.prive || (S.moi && (i.auteur_id==S.moi.id || i.assigne_id==S.moi.id));
-const visibles     = ()=> S.items.filter(i=>pourMoi(i) && !perso(i));
+const visibles     = ()=> S.items.filter(i=>pourMoi(i) && dansPerimetre(i) && !perso(i));
 /* Un sujet sans restaurant concerne tous les restaurants. */
 const concerne     = (i,rid) => i.restaurant_id==null || i.restaurant_id==rid;
 const ouverts  = ()=> visibles().filter(i=>i.statut!=='Fait');
@@ -574,7 +585,7 @@ function aliasResto(r){
 }
 function detectResto(t){
   let best=null, len=0;
-  S.restos.forEach(r=>aliasResto(r).forEach(a=>{
+  restosVus().forEach(r=>aliasResto(r).forEach(a=>{
     if(a.length>len && new RegExp('(^|[^a-z])'+a.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')).test(t)){ best=r.id; len=a.length; }
   }));
   return best;
@@ -654,7 +665,7 @@ function analyseLocale(texte){
     if(!resto && membre) resto = membre.restaurant_id;
     if(prive) resto=null;
     else if(/tous les restaurants|tous les sites|partout|les 7 restaurants|tout le groupe/.test(t)) resto=null;
-    else if(!resto){ resto = S.restos.length?S.restos[0].id:null; doute.push('restaurant'); }
+    else if(!resto){ const rv=restosVus(); resto = rv.length?rv[0].id:null; if(rv.length>1) doute.push('restaurant'); }
     const cat = prive? 'perso' : detectCat(t);
     if(cat==='organisation') doute.push('categorie');
     let titre = bout.trim().replace(/^./,c=>c.toUpperCase());
@@ -669,7 +680,7 @@ function analyseLocale(texte){
 async function analyser(texte){
   const contexte={
     date:new Date().toISOString().slice(0,10),
-    restaurants:S.restos.map(r=>({id:r.id,nom:r.nom,alias:r.alias||''})),
+    restaurants:restosVus().map(r=>({id:r.id,nom:r.nom,alias:r.alias||''})),
     equipe:S.membres.map(m=>({id:m.id,nom:m.nom,poste:m.poste,restaurant_id:m.restaurant_id})),
     utilisateurs:S.users.map(u=>({id:u.id,nom:u.nom,role:u.role})),
     moi:S.moi?{id:S.moi.id,nom:S.moi.nom}:null,
@@ -693,7 +704,8 @@ function nettoie(s){
   let resto = ok(s.restaurant_id)? s.restaurant_id : null;
   const membre = S.membres.find(m=>m.id==s.membre_id)||null;
   if(!resto && membre) resto = membre.restaurant_id;
-  if(!resto && !tous){ resto = S.restos.length?S.restos[0].id:null; if(!doute.includes('restaurant')) doute.push('restaurant'); }
+  if(!resto && !tous){ const rv=restosVus(); resto = rv.length?rv[0].id:null;
+    if(rv.length>1 && !doute.includes('restaurant')) doute.push('restaurant'); }
   if(tous) resto=null;
   if(s.prive===true && !s.assigne_id) resto=null;   // tâche personnelle : aucun restaurant
   return {
@@ -762,7 +774,7 @@ function carteHTML(m,i){
     <div class="grid">
       <select class="${d('restaurant')}" onchange="majCarte(${i},'restaurant_id',this.value)">
         <option value="" ${s.restaurant_id==null?'selected':''}>${s.categorie==='perso'?'Sans restaurant':'Tous les restaurants'}</option>
-        ${S.restos.map(r=>`<option value="${r.id}" ${r.id==s.restaurant_id?'selected':''}>${esc(r.nom)}</option>`).join('')}
+        ${restosVus().map(r=>`<option value="${r.id}" ${r.id==s.restaurant_id?'selected':''}>${esc(r.nom)}</option>`).join('')}
       </select>
       <select class="${d('categorie')}" onchange="majCarte(${i},'categorie',this.value)">
         ${CATS.map(c=>`<option value="${c.id}" ${c.id===s.categorie?'selected':''}>${c.nom}</option>`).join('')}
@@ -909,7 +921,7 @@ function renderPilotage(){
   $('top-list').innerHTML = top.length
     ? top.map((it,i)=>ligneItem(it,i+1)).join('')
     : `<div class="empty"><b>Rien en attente</b>Note un sujet depuis l'écran Capture</div>`;
-  $('pil-restos').innerHTML = S.restos.map(r=>{
+  $('pil-restos').innerHTML = restosVus().map(r=>{
     const l=ouv.filter(i=>concerne(i,r.id));
     const urg=l.filter(i=>i.priorite==1||(jours(i.echeance)!==null&&jours(i.echeance)<0)).length;
     return `<button class="resto" onclick="openResto2(${r.id})">
@@ -926,7 +938,7 @@ function renderPilotage(){
 }
 function renderRestos(){
   const ouv=ouverts();
-  $('resto-list').innerHTML = S.restos.map(r=>{
+  $('resto-list').innerHTML = restosVus().map(r=>{
     const l=ouv.filter(i=>concerne(i,r.id));
     const eq=S.membres.filter(m=>m.restaurant_id==r.id).length;
     return `<button class="resto" onclick="openResto2(${r.id})">
@@ -1067,7 +1079,7 @@ function renderMoi(){
       return `<button class="membre" onclick="openUser(${u.id})">
         <span class="ini">${ini}</span>
         <span><span class="nm">${esc(u.nom)}${u.id==S.moi.id?' (toi)':''}</span><br>
-        <span class="po">${esc(u.role||'')} · code ${esc(u.pin||'—')}${u.actif===false?' · désactivé':''}</span></span>
+        <span class="po">${esc(u.role||'')}${u.restaurant_id?' · '+esc(nomResto(u.restaurant_id)):''}${u.superieur_id?' · sous '+esc(nomUser(u.superieur_id)):''} · code ${esc(u.pin||'—')}${u.actif===false?' · désactivé':''}</span></span>
         ${n?`<span class="cnt"><span class="bubble n">${n}</span></span>`:''}</button>`;
     }).join('')
       + `<button class="btn sec" onclick="openUser()">Ajouter un utilisateur</button>`
@@ -1089,7 +1101,7 @@ function render(){
     const o=ouverts().length; $('subtitle').innerHTML=o+' sujet'+(o>1?'s':'')+' ouvert'+(o>1?'s':'');
     bienvenue(); renderChat(); }
   if(S.view==='pilotage'){ $('title').textContent='Pilotage';
-    const o=ouverts().length; $('subtitle').innerHTML=`${S.restos.length} restaurants<br>${o} sujet${o>1?'s':''} ouvert${o>1?'s':''}`;
+    const o=ouverts().length; $('subtitle').innerHTML=`${restosVus().length} restaurant${restosVus().length>1?'s':''}<br>${o} sujet${o>1?'s':''} ouvert${o>1?'s':''}`;
     renderPilotage(); }
   if(S.view==='restos'){ $('title').textContent='Restaurants'; $('subtitle').innerHTML=''; renderRestos(); }
   if(S.view==='resto')  renderResto();
@@ -1117,7 +1129,7 @@ document.querySelectorAll('.sheet').forEach(s=>s.addEventListener('click',e=>{ i
 
 function optionsResto(sel,v,sansResto){
   sel.innerHTML=`<option value="" ${v==null?'selected':''}>${sansResto?'Sans restaurant':'Tous les restaurants'}</option>`
-    +S.restos.map(r=>`<option value="${r.id}" ${r.id==v?'selected':''}>${esc(r.nom)}</option>`).join('');
+    +restosVus().map(r=>`<option value="${r.id}" ${r.id==v?'selected':''}>${esc(r.nom)}</option>`).join('');
 }
 function optionsVisibilite(val,assigne){
   const a=nomUser(assigne);
@@ -1269,6 +1281,10 @@ function openUser(id){
   const roles=['Direction','Superviseur','Directeur','Autre'];
   const r=u&&u.role?u.role:'Superviseur';
   $('u-role').innerHTML=[...new Set([...roles,r])].map(x=>`<option ${x===r?'selected':''}>${esc(x)}</option>`).join('');
+  $('u-resto').innerHTML='<option value="">Tout le groupe</option>'+S.restos.map(r=>
+    `<option value="${r.id}" ${u&&u.restaurant_id==r.id?'selected':''}>${esc(r.nom)}</option>`).join('');
+  $('u-sup').innerHTML='<option value="">—</option>'+S.tousUsers.filter(x=>!x.restaurant_id&&(!u||x.id!=u.id)).map(x=>
+    `<option value="${x.id}" ${u&&u.superieur_id==x.id?'selected':''}>${esc(x.nom)}</option>`).join('');
   $('u-actif').value=(u&&u.actif===false)?'0':'1';
   $('ub-suppr').style.display=(u&&u.id!=S.moi.id)?'block':'none';
   openSheet('sh-user');
@@ -1278,12 +1294,14 @@ async function saveUser(){
   const pin=$('u-pin').value.replace(/\D/g,'');
   if(pin.length<4) return toast('Le code doit faire au moins 4 chiffres');
   if(S.tousUsers.some(u=>u.pin===pin && u.id!=S.editUser)) return toast('Ce code est déjà utilisé');
-  const row={nom,role:$('u-role').value,pin,actif:$('u-actif').value==='1'};
+  const row={nom,role:$('u-role').value,pin,actif:$('u-actif').value==='1',
+             restaurant_id:$('u-resto').value? +$('u-resto').value : null,
+             superieur_id:$('u-sup').value? +$('u-sup').value : null};
   try{
     if(S.editUser){ await dbUpdate('orga_utilisateurs',S.editUser,row); }
     else{ await dbInsert('orga_utilisateurs',row); }
     await charger();
-    if(S.editUser==S.moi.id){ S.moi.nom=row.nom; S.moi.role=row.role;
+    if(S.editUser==S.moi.id){ S.moi.nom=row.nom; S.moi.role=row.role; S.moi.restaurant_id=row.restaurant_id;
       sess('bkco_orga_moi',JSON.stringify(S.moi)); }
     closeSheet('sh-user'); render(); toast('Enregistré');
   }catch(e){ toast('Erreur : '+e.message); }
@@ -1362,7 +1380,7 @@ $('pin').addEventListener('input',async e=>{
     u=mem.orga_utilisateurs.find(x=>x.pin===v)||null;
   }
   if(!u && v===PIN_SECOURS) u={id:1,nom:'Moi',role:'admin'};
-  if(u){ S.moi={id:u.id,nom:u.nom,role:u.role}; sess('bkco_orga_moi',JSON.stringify(S.moi)); demarrer(); }
+  if(u){ S.moi={id:u.id,nom:u.nom,role:u.role,restaurant_id:u.restaurant_id||null,superieur_id:u.superieur_id||null}; sess('bkco_orga_moi',JSON.stringify(S.moi)); demarrer(); }
   else { $('pinErr').textContent='Code incorrect'; e.target.value=''; }
 });
 function logout(){ try{ sessionStorage.removeItem('bkco_orga_moi'); }catch(e){} location.reload(); }
@@ -1374,7 +1392,11 @@ async function charger(){
   S.membres=m; S.items=i;
   S.tousUsers=(u||[]).sort((a,b)=>(a.id||0)-(b.id||0));
   S.users=S.tousUsers.filter(x=>x.actif!==false).map(x=>({id:x.id,nom:x.nom,role:x.role}));
-  if(S.moi && !S.users.some(x=>x.id==S.moi.id)) S.users.unshift(S.moi);
+  if(S.moi){
+    const a=S.tousUsers.find(x=>x.id==S.moi.id);          // périmètre toujours à jour
+    if(a){ S.moi.restaurant_id=a.restaurant_id||null; S.moi.role=a.role; S.moi.nom=a.nom; }
+    if(!S.users.some(x=>x.id==S.moi.id)) S.users.unshift(S.moi);
+  }
 }
 async function demarrer(){
   $('login').style.display='none';
