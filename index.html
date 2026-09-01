@@ -694,7 +694,15 @@ function analyseLocale(texte){
       if(rv.length===1) resto=rv[0].id; else { resto=null; doute.push('restaurant'); } }
     const cat = prive? 'perso' : detectCat(t);
     if(cat==='organisation') doute.push('categorie');
-    let titre = bout.trim().replace(/^./,c=>c.toUpperCase());
+    /* Le titre s'adresse à celui qui doit agir. */
+    let titre = bout.trim();
+    if(assigne){
+      const pre=norm(nomUser(assigne)||'').split(' ')[0];
+      if(pre) titre=titre.replace(new RegExp('^\\s*'+pre+"\\s+(doit|va|peut|devrait)\\s+",'i'),'');
+      titre=titre.replace(/\bses\b/gi,'mes').replace(/\bson\b/gi,'mon')
+                 .replace(/\bsa\b/gi,'ma').replace(/\bleurs?\b/gi,'mes');
+    }
+    titre = titre.replace(/^./,c=>c.toUpperCase());
     let desc=null;
     if(titre.length>90){ desc=titre; titre=titre.slice(0,87).trim()+'…'; }
     return {titre,restaurant_id:resto,membre_id:membre?membre.id:null,categorie:cat,
