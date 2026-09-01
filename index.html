@@ -690,6 +690,19 @@ function analyseLocale(texte){
             assigne_id:assigne,prive:prive,incertain:doute};
   });
 }
+/* Règle de visibilité par défaut à la dictée :
+   confier un sujet à quelqu'un, c'est une conversation à deux — sauf si
+   la phrase dit explicitement que ça concerne tout le monde. */
+function reglesVisibilite(sujets,texte){
+  const t=norm(texte);
+  const ouvert=/(tout le monde|toute l equipe|pour tous|a tous|pour l equipe|en reunion|que tout le monde)/.test(t);
+  sujets.forEach(s=>{
+    if(s.categorie==='perso'){ s.prive=true; s.assigne_id=null; s.restaurant_id=null; return; }
+    if(ouvert){ s.prive=false; return; }
+    if(s.assigne_id && !(S.moi && s.assigne_id==S.moi.id)) s.prive=true;
+  });
+  return sujets;
+}
 async function analyser(texte){
   const contexte={
     date:new Date().toISOString().slice(0,10),
@@ -704,10 +717,11 @@ async function analyser(texte){
       body:JSON.stringify({message:texte,contexte})});
     if(r.ok){
       const j=await r.json();
-      if(j.sujets && j.sujets.length) return {source:'ia',sujets:j.sujets.map(nettoie)};
+      if(j.sujets && j.sujets.length)
+        return {source:'ia',sujets:reglesVisibilite(j.sujets.map(nettoie),texte)};
     }
   }catch(e){}
-  return {source:'local',sujets:analyseLocale(texte)};
+  return {source:'local',sujets:reglesVisibilite(analyseLocale(texte),texte)};
 }
 function nettoie(s){
   const ok = id => S.restos.some(r=>r.id==id);
