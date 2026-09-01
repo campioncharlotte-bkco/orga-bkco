@@ -1047,13 +1047,19 @@ function renderPilotage(){
     $('pilotage-corps').innerHTML = html; return;
   }
 
-  html += `<div class="section-h"><h2>Par personne</h2><span>qui doit agir</span></div>`;
+  /* Filtre « Traités » : la liste se suffit à elle-même, pas de répartitions. */
+  if(S.kpi==='fait'){ $('pilotage-corps').innerHTML = html; return; }
+
+  /* Les répartitions suivent le filtre actif : on ne montre que les personnes
+     et les restaurants concernés par les sujets affichés au-dessus. */
+  const lotAffiche = S.kpi? top : ouv;
+  html += `<div class="section-h"><h2>Par personne</h2><span>${S.kpi?'concernées':'qui doit agir'}</span></div>`;
   const lignes=S.users.map(u=>{
-    const l=ouv.filter(i=>i.assigne_id==u.id);
+    const l=lotAffiche.filter(i=>i.assigne_id==u.id);
     return {nom:u.nom, role:u.role||'', n:l.length,
             urg:l.filter(i=>i.priorite==1||(jours(i.echeance)!==null&&jours(i.echeance)<0)).length};
   }).filter(x=>x.n>0).sort((a,b)=>b.n-a.n);
-  const sans=ouv.filter(i=>!i.assigne_id).length;
+  const sans=lotAffiche.filter(i=>!i.assigne_id).length;
   html += lignes.map(x=>`<button class="resto" onclick="ordreParPersonne('${esc(x.nom)}')">
       <span><span class="nm">${esc(x.nom)}</span><br><span class="zn">${esc(x.role)}</span></span>
       <span class="cnt">${x.urg?`<span class="bubble a">${x.urg}</span>`:''}
@@ -1063,7 +1069,7 @@ function renderPilotage(){
 
   html += `<div class="section-h"><h2>Par restaurant</h2></div>`;
   html += restosVus().map(r=>{
-    const l=ouv.filter(i=>concerne(i,r.id));
+    const l=lotAffiche.filter(i=>concerne(i,r.id));
     if(!l.length) return '';
     const urg=l.filter(i=>i.priorite==1||(jours(i.echeance)!==null&&jours(i.echeance)<0)).length;
     return `<button class="resto" onclick="openResto2(${r.id})">
