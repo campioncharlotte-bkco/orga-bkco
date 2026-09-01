@@ -109,6 +109,10 @@ a{color:var(--navy)}
 .item .t{font-weight:500;font-size:14.5px;line-height:1.3;word-break:break-word}
 .item .meta{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}
 .item.done .t{color:var(--ink-3);text-decoration:line-through}
+.item .corps{flex:1;display:flex;align-items:stretch;min-width:0;text-align:left;padding:0}
+.item .coche{flex:0 0 48px;border-left:1px solid var(--line);color:var(--ink-3);font-size:19px;
+  display:flex;align-items:center;justify-content:center}
+.item .coche.ok{color:var(--open);background:var(--open-bg)}
 .chip{font-size:10.5px;padding:2px 7px;border-radius:999px;background:var(--off-bg);color:var(--off);
   white-space:nowrap;font-weight:500}
 .chip.late,.chip.p1{background:var(--close-bg);color:var(--close)}
@@ -943,12 +947,26 @@ async function dicter(){
 /* ============================================================
    8. RENDU GÉNÉRAL
    ============================================================ */
+/* Cocher depuis la liste, sans ouvrir la fiche. Un second appui rouvre le sujet. */
+async function basculeFait(id,ev){
+  if(ev) ev.stopPropagation();
+  const it=S.items.find(x=>x.id==id); if(!it) return;
+  const fait = it.statut!=='Fait';
+  const patch = fait ? {statut:'Fait', date_cloture:new Date().toISOString()}
+                     : {statut:'À traiter', date_cloture:null};
+  try{
+    const u=await dbUpdate('orga_items',id,patch);
+    S.items=S.items.map(x=>x.id==id?u:x);
+    render(); toast(fait?'C\'est fait':'Sujet rouvert');
+  }catch(e){ toast('Erreur : '+e.message); }
+}
 function ligneItem(it,rang){
   const r = raisons(it).map(([c,t])=>`<span class="chip ${c}">${t}</span>`).join('');
   const assigne = nomUser(it.assigne_id);
   const auteur  = (S.moi && it.auteur_id && it.auteur_id!=S.moi.id) ? nomUser(it.auteur_id) : null;
-  return `<button class="item ${it.statut==='Fait'?'done':''}" onclick="openItem(${it.id})">
+  return `<div class="item ${it.statut==='Fait'?'done':''}">
     <span class="rail" style="background:${couleur(it)}"></span>
+    <button class="corps" onclick="openItem(${it.id})">
     ${rang?`<span class="rank">${rang}</span>`:''}
     <span class="body">
       <span class="t">${esc(it.titre)}</span>
@@ -961,7 +979,10 @@ function ligneItem(it,rang){
         ${auteur?`<span class="chip">noté par ${esc(auteur)}</span>`:''}
         ${perso(it)?`<span class="chip">moi seule</span>`:(it.prive?`<span class="chip">restreint</span>`:'')}
       </span>
-    </span></button>`;
+    </span></button>
+    <button class="coche ${it.statut==='Fait'?'ok':''}" onclick="basculeFait(${it.id},event)"
+      aria-label="${it.statut==='Fait'?'Rouvrir':'Marquer traité'}">${it.statut==='Fait'?'✓':'○'}</button>
+  </div>`;
 }
 /* Deux pilotages, séparés par le niveau qui traite le sujet :
    - « BKCO »  : ce qui est sur la table de la supervision (direction, superviseurs)
