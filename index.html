@@ -148,10 +148,9 @@ a{color:var(--navy)}
 /* ===================================================================
    4. CAPTURE
    =================================================================== */
-#s-capture{display:none;flex-direction:column;
-  height:calc(100vh - 112px - env(safe-area-inset-top) - env(safe-area-inset-bottom))}
-#s-capture.on{display:flex}
-#chat-flux{flex:1;overflow-y:auto;padding-bottom:10px}
+#s-capture{display:none}
+#s-capture.on{display:block;padding-bottom:82px}   /* place pour la barre de saisie */
+#chat-flux{padding-bottom:6px}
 .bulle{max-width:88%;padding:10px 13px;border-radius:16px;margin-bottom:9px;font-size:14.5px;
   line-height:1.45;word-break:break-word;white-space:pre-wrap}
 .bulle.moi{background:var(--navy);color:#fff;margin-left:auto;border-bottom-right-radius:5px;font-weight:500}
@@ -172,12 +171,15 @@ a{color:var(--navy)}
 .carte .acts2 button{flex:1;padding:10px;border-radius:10px;font-size:13.5px;font-weight:600}
 .carte .ok2{background:var(--orange);color:#fff}
 .carte .no2{background:var(--off-bg);color:var(--ink-2);flex:0 0 40%}
-.saisie{display:flex;gap:8px;align-items:flex-end;padding:10px 0 6px;
-  border-top:1px solid var(--line);background:var(--paper)}
-.saisie textarea{flex:1;min-height:44px;max-height:150px;border-radius:14px;padding:11px 14px;resize:none;
+.saisie{position:fixed;left:0;right:0;bottom:var(--bas);z-index:45;
+  display:flex;gap:8px;align-items:flex-end;padding:9px 14px 10px;
+  border-top:1px solid var(--line);background:var(--paper);
+  box-shadow:0 -6px 16px rgba(17,24,39,.06)}
+@media(min-width:700px){.saisie{max-width:820px;margin:0 auto}}
+.saisie textarea{flex:1;min-height:48px;max-height:140px;border-radius:14px;padding:13px 14px;resize:none;
   background:var(--card);border:1px solid var(--line)}
-.saisie button{flex:0 0 44px;height:44px;border-radius:50%;background:var(--orange);color:#fff;
-  font-size:18px;display:flex;align-items:center;justify-content:center}
+.saisie button{flex:0 0 48px;height:48px;border-radius:50%;background:var(--orange);color:#fff;
+  font-size:19px;display:flex;align-items:center;justify-content:center}
 .saisie button.mic{background:var(--card);border:1px solid var(--line);color:var(--ink-2)}
 .saisie button.mic.rec{background:var(--close);border-color:var(--close);color:#fff}
 
@@ -740,7 +742,7 @@ function renderChat(){
     if(m.role==='carte')return carteHTML(m,i);
     return '';
   }).join('');
-  el.scrollTop = el.scrollHeight;
+  window.scrollTo({top:document.body.scrollHeight,behavior:'smooth'});
 }
 function carteHTML(m,i){
   const s=m.s;
@@ -811,7 +813,7 @@ async function ranger(i){
 async function envoyer(){
   const t=$('msg').value.trim(); if(!t) return;
   if(!S.restos.length){ toast('Ajoute d\'abord un restaurant'); return go('restos'); }
-  $('msg').value=''; $('msg').style.height='46px';
+  $('msg').value=''; $('msg').style.height='48px';
   S.chat.push({role:'moi',texte:t});
   S.chat.push({role:'app',texte:'…'});
   renderChat();
@@ -826,7 +828,7 @@ async function envoyer(){
   }
   renderChat();
 }
-$('msg').addEventListener('input',e=>{ e.target.style.height='46px'; e.target.style.height=Math.min(e.target.scrollHeight,150)+'px'; });
+$('msg').addEventListener('input',e=>{ e.target.style.height='48px'; e.target.style.height=Math.min(e.target.scrollHeight,140)+'px'; });
 $('msg').addEventListener('keydown',e=>{ if(e.key==='Enter'&&(e.metaKey||e.ctrlKey)) envoyer(); });
 
 /* Dictée vocale (Chrome / Android ; sur iPhone utilise le micro du clavier) */
