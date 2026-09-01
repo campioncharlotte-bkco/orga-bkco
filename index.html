@@ -1099,7 +1099,7 @@ function renderResto(){
   const r=S.restos.find(x=>x.id==S.resto); if(!r) return go('restos');
   $('title').textContent=r.nom;
   const ouv=ouverts().filter(i=>concerne(i,r.id));
-  $('subtitle').innerHTML=`${ouv.length} ouvert${ouv.length>1?'s':''}<br>${esc(r.zone||'')}`;
+  $('subtitle').innerHTML=esc(r.zone||'');
   const tabs=[['apercu','Aperçu'],['equipe','Équipe'],...CATS_RESTO.map(c=>[c.id,c.nom.split(' /')[0]]),['fait','Traités']];
   $('resto-tabs').innerHTML = tabs.map(([id,l])=>{
     let n='';
@@ -1165,7 +1165,7 @@ function renderOrdre(){
     ? l.map((it,i)=>ligneItem(it,S.filtreStatut==='fait'?0:i+1)).join('')
     : `<div class="empty"><b>Aucun résultat</b>Change de filtre ou note un nouveau sujet</div>`)
     + (S.filtreStatut==='fait' ? boutonPurge(null,null) : '');
-  $('subtitle').innerHTML = l.length+' sujet'+(l.length>1?'s':'');
+  $('subtitle').innerHTML = '';
 }
 /* Purge : sujets traités il y a plus de 6 mois.
    portee = id de restaurant, 'perso', ou null pour toute la file commune. */
@@ -1246,20 +1246,17 @@ function setTab(t){ S.tab=t; renderResto(); window.scrollTo(0,0); }
 
 function render(){
   if(S.view==='capture'){ $('title').textContent='Talk to me';
-    const o=ouverts().length; $('subtitle').innerHTML=o+' sujet'+(o>1?'s':'')+' ouvert'+(o>1?'s':'');
-    bienvenue(); renderChat(); }
+    $('subtitle').innerHTML=''; bienvenue(); renderChat(); }
   if(S.view==='pilotage'){ $('title').textContent='Le Point';
-    const o=lotPilotage(ouverts()).length;
     $('subtitle').innerHTML=(S.pilot==='bkco'?'Traité par la supervision':
                              S.pilot==='restos'?'Confié aux directeurs':
-                             S.pilot==='pro'?'Mon travail de fond':'Ma vie hors restaurants')
-      +`<br>${o} sujet${o>1?'s':''} ouvert${o>1?'s':''}`;
+                             S.pilot==='pro'?'Mon travail de fond':'Ma vie hors restaurants');
     renderPilotage(); }
   if(S.view==='restos'){ $('title').textContent='Restaurants'; $('subtitle').innerHTML=''; renderRestos(); }
   if(S.view==='resto')  renderResto();
   if(S.view==='ordre'){ $('title').textContent='Priorités'; renderOrdre(); }
   if(S.view==='moi'){ $('title').textContent=S.moi?S.moi.nom:'Moi';
-    $('subtitle').innerHTML=(S.moi&&S.moi.role?esc(S.moi.role):'')+'<br>'+mesPerso().filter(i=>i.statut!=='Fait').length+' perso · '+mesAssignes().length+' pour moi';
+    $('subtitle').innerHTML=(S.moi&&S.moi.role?esc(S.moi.role):'');
     renderMoi(); }
 }
 function go(v){
