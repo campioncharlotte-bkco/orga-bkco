@@ -134,6 +134,10 @@ a{color:var(--navy)}
 
 .tabs{display:flex;gap:6px;margin:0 0 12px;overflow-x:auto;scrollbar-width:none;padding-bottom:2px}
 .tabs::-webkit-scrollbar{display:none}
+/* Au doigt on fait défiler ; à la souris on préfère tout voir d'un coup. */
+@media(min-width:700px){
+  .tabs{flex-wrap:wrap;overflow-x:visible;row-gap:6px}
+}
 .tab{padding:7px 13px;border-radius:999px;background:var(--card);border:1px solid var(--line);
   font-size:13px;color:var(--ink-2);white-space:nowrap}
 .tab.on{background:var(--navy);border-color:var(--navy);color:#fff;font-weight:600}
