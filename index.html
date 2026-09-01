@@ -335,7 +335,7 @@ textarea{min-height:84px;resize:vertical;font-size:15px;line-height:1.5}
   <label>Sujet</label>
   <input id="f-titre" placeholder="Ex : Friteuse 2 en panne">
   <div class="row">
-    <div><label>Restaurant</label><select id="f-resto"></select></div>
+    <div id="bloc-resto"><label>Restaurant</label><select id="f-resto"></select></div>
     <div><label>À traiter</label><select id="f-echeance"></select></div>
   </div>
   <label>Catégorie</label>
@@ -346,11 +346,11 @@ textarea{min-height:84px;resize:vertical;font-size:15px;line-height:1.5}
   <div class="seg" id="f-statut"></div>
   <div class="row">
     <div><label>Qui s'en occupe</label><input id="f-resp" placeholder="Nom"></div>
-    <div><label>Personne concernée</label><select id="f-membre"></select></div>
+    <div id="bloc-membre"><label>Personne concernée</label><select id="f-membre"></select></div>
   </div>
   <div class="row">
-    <div><label>Assigné à</label><select id="f-assigne"></select></div>
-    <div><label>Visible par</label><select id="f-prive"></select></div>
+    <div id="bloc-assigne"><label>Assigné à</label><select id="f-assigne"></select></div>
+    <div id="bloc-visib"><label>Visible par</label><select id="f-prive"></select></div>
   </div>
   <label>Détail</label>
   <textarea id="f-desc" placeholder="Contexte, ce qui a déjà été fait, ce qui bloque…"></textarea>
@@ -933,6 +933,7 @@ function roleDe(id){ const u=S.users.find(x=>x.id==id); return u?(u.role||''):''
 const estSupervision = r => /direction|supervis|admin|franchis/i.test(r||'');
 const niveauBKCO = i => !i.assigne_id || estSupervision(roleDe(i.assigne_id));
 function lotPilotage(liste){
+  if(S.pilot==='perso') return liste.filter(i=>perso(i) && i.auteur_id==S.moi.id);
   return S.pilot==='bkco' ? liste.filter(niveauBKCO) : liste.filter(i=>!niveauBKCO(i));
 }
 function setPilot(v){ S.pilot=v; renderPilotage(); window.scrollTo(0,0); }
@@ -940,22 +941,32 @@ function ordreParPersonne(nom){ S.filtreCat='tout'; S.filtreStatut='ouvert'; go(
   $('q').value=nom; renderOrdre(); }
 
 function renderPilotage(){
-  const ouv = lotPilotage(ouverts());
+  /* le perso est exclu de visibles(), on repart donc de S.items pour cet onglet */
+  const base = S.pilot==='perso' ? S.items.filter(i=>i.statut!=='Fait') : ouverts();
+  const ouv = lotPilotage(base);
   $('pilot-tabs').innerHTML =
     `<button class="tab ${S.pilot==='bkco'?'on':''}" onclick="setPilot('bkco')">Pilotage BKCO</button>
-     <button class="tab ${S.pilot==='restos'?'on':''}" onclick="setPilot('restos')">Pilotage restos</button>`;
+     <button class="tab ${S.pilot==='restos'?'on':''}" onclick="setPilot('restos')">Pilotage restos</button>
+     <button class="tab ${S.pilot==='perso'?'on':''}" onclick="setPilot('perso')">Pilotage perso</button>`;
   $('k-ouv').textContent  = ouv.length;
   $('k-ret').textContent  = ouv.filter(i=>{const j=jours(i.echeance);return j!==null&&j<0;}).length;
   $('k-p1').textContent   = ouv.filter(i=>i.priorite==1).length;
-  $('k-fait').textContent = lotPilotage(visibles()).filter(i=>i.statut==='Fait'&&i.date_cloture&&
+  $('k-fait').textContent = lotPilotage(S.pilot==='perso'?S.items:visibles())
+                              .filter(i=>i.statut==='Fait'&&i.date_cloture&&
                               (Date.now()-new Date(i.date_cloture))<30*86400000).length;
 
   const top=trie(ouv).slice(0,6);
   let html = `<div class="section-h"><h2>À traiter aujourd'hui</h2><span>par ordre de priorité</span></div>`
     + (top.length ? top.map((it,k)=>ligneItem(it,k+1)).join('')
-      : `<div class="empty"><b>Rien en attente</b>${S.pilot==='bkco'
-          ? "Les sujets que la supervision doit traiter arrivent ici"
-          : "Les sujets confiés aux directeurs arrivent ici"}</div>`);
+      : `<div class="empty"><b>Rien en attente</b>${
+          S.pilot==='bkco'  ? "Les sujets que la supervision doit traiter arrivent ici" :
+          S.pilot==='perso' ? "Tes tâches personnelles arrivent ici, visibles de toi seule"
+                            : "Les sujets confiés aux directeurs arrivent ici"}</div>`);
+
+  if(S.pilot==='perso'){
+    html += `<button class="btn sec" onclick="openItem(null,null,'perso',{prive:true})">Ajouter une tâche personnelle</button>`;
+    $('pilotage-corps').innerHTML = html; return;
+  }
 
   html += `<div class="section-h"><h2>Par personne</h2><span>qui doit agir</span></div>`;
   const lignes=S.users.map(u=>{
@@ -1205,6 +1216,13 @@ function optionsUser(sel,v){
   $(sel).innerHTML='<option value="">—</option>'+S.users.map(u=>
     `<option value="${u.id}" ${u.id==v?'selected':''}>${esc(u.nom)}</option>`).join('');
 }
+/* Une tâche perso ne concerne ni restaurant, ni équipe, ni personne d'autre :
+   on masque ces champs plutôt que de les laisser piéger la saisie. */
+function majChampsPerso(){
+  const p = $('f-cat').value==='perso';
+  ['bloc-resto','bloc-membre','bloc-assigne','bloc-visib'].forEach(id=>{ $(id).style.display = p?'none':''; });
+  if(p){ $('f-resto').value=''; $('f-assigne').value=''; $('f-membre').value=''; }
+}
 function openItem(id,restoDefaut,catDefaut,opts){
   opts=opts||{};
   if(!S.restos.length && !opts.prive && !id){ toast('Ajoute d\'abord un restaurant'); return go('restos'); }
@@ -1233,6 +1251,8 @@ function openItem(id,restoDefaut,catDefaut,opts){
   $('f-resto').onchange = ()=>optionsMembre($('f-resto').value,null);
   $('b-suppr').style.display = it?'block':'none';
   $('b-clore').style.display = (it && it.statut!=='Fait')?'block':'none';
+  $('f-cat').onchange = majChampsPerso;
+  majChampsPerso();
   renderActions(); $('f-newact').value='';
   openSheet('sh-item');
 }
@@ -1262,6 +1282,7 @@ async function saveItem(){
     prive:$('f-prive').value!=='equipe',
     actions:S.actions, updated_at:new Date().toISOString()
   };
+  if(row.categorie==='perso'){ row.restaurant_id=null; row.membre_id=null; row.assigne_id=null; row.prive=true; }
   if(!S.editItem) row.auteur_id = S.moi? S.moi.id : null;
   if(row.statut==='Fait') row.date_cloture=new Date().toISOString();
   try{
