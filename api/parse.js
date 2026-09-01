@@ -34,7 +34,7 @@ RÈGLES
 5. description : uniquement le contexte supplémentaire réellement dicté. Sinon null.
 6. priorite : 1 si urgence, blocage d'exploitation, sécurité, hygiène, juridique ou salarié en souffrance ; 3 si c'est un "à voir quand j'aurai le temps" ; 2 par défaut.
 7. echeance : format AAAA-MM-JJ, calculée à partir de la date du jour ("demain", "lundi", "avant fin de semaine"). null si rien n'est dit.
-8. categorie : l'id exact de la liste.
+8. categorie : l'id exact de la liste. La catégorie "perso" est réservée à sa vie personnelle, sans lien avec les restaurants (rendez-vous, courses, famille, administratif privé) : dans ce cas, restaurant_id vaut null et prive vaut true.
 9. responsable : seulement si elle désigne explicitement qui s'en occupe.
 10. actions : découpe en étapes uniquement si elle en énonce plusieurs. Sinon tableau vide.
 11. assigne_id : si elle dit "pour Thomas", "voir avec Agnès", "je délègue à X", mets l'id de cet utilisateur. Sinon null. Ne confonds pas un utilisateur de l'app avec un membre d'équipe en restaurant.
