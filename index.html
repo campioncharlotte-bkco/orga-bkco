@@ -429,8 +429,10 @@ const CATS = [
   {id:'organisation',nom:'Organisation / process',  g:'◆', poids:6},
   {id:'commercial',  nom:'Commercial / client',     g:'★', poids:12},
   {id:'admin',       nom:'Admin / finance',         g:'▤', poids:10},
-  {id:'travaux',     nom:'Travaux / investissement',g:'⬔', poids:6}
+  {id:'travaux',     nom:'Travaux / investissement',g:'⬔', poids:6},
+  {id:'perso',       nom:'Perso',                   g:'◕', poids:0}   // hors restaurants
 ];
+const CATS_RESTO = CATS.filter(c=>c.id!=='perso');
 const CAT = Object.fromEntries(CATS.map(c=>[c.id,c]));
 const PRIOS    = [{v:1,l:'Critique'},{v:2,l:'Important'},{v:3,l:'À suivre'}];
 const STATUTS  = ['À traiter','En cours','En attente','Bloqué','Fait'];
@@ -646,9 +648,10 @@ function analyseLocale(texte){
     let resto = detectResto(t);
     const membre = detectMembre(t);
     if(!resto && membre) resto = membre.restaurant_id;
-    if(/tous les restaurants|tous les sites|partout|les 7 restaurants|tout le groupe/.test(t)) resto=null;
+    if(prive) resto=null;
+    else if(/tous les restaurants|tous les sites|partout|les 7 restaurants|tout le groupe/.test(t)) resto=null;
     else if(!resto){ resto = S.restos.length?S.restos[0].id:null; doute.push('restaurant'); }
-    const cat = detectCat(t);
+    const cat = prive? 'perso' : detectCat(t);
     if(cat==='organisation') doute.push('categorie');
     let titre = bout.trim().replace(/^./,c=>c.toUpperCase());
     let desc=null;
@@ -688,6 +691,7 @@ function nettoie(s){
   if(!resto && membre) resto = membre.restaurant_id;
   if(!resto && !tous){ resto = S.restos.length?S.restos[0].id:null; if(!doute.includes('restaurant')) doute.push('restaurant'); }
   if(tous) resto=null;
+  if(s.prive===true && !s.assigne_id) resto=null;   // tâche personnelle : aucun restaurant
   return {
     titre:(s.titre||'Sujet sans titre').slice(0,120),
     restaurant_id:resto,
@@ -753,7 +757,7 @@ function carteHTML(m,i){
     ${membre?`<div class="who">${esc(membre.nom)} · ${esc(membre.poste||'')} · ${esc(nomResto(membre.restaurant_id))}</div>`:''}
     <div class="grid">
       <select class="${d('restaurant')}" onchange="majCarte(${i},'restaurant_id',this.value)">
-        <option value="" ${s.restaurant_id==null?'selected':''}>Tous les restaurants</option>
+        <option value="" ${s.restaurant_id==null?'selected':''}>${s.categorie==='perso'?'Sans restaurant':'Tous les restaurants'}</option>
         ${S.restos.map(r=>`<option value="${r.id}" ${r.id==s.restaurant_id?'selected':''}>${esc(r.nom)}</option>`).join('')}
       </select>
       <select class="${d('categorie')}" onchange="majCarte(${i},'categorie',this.value)">
@@ -831,19 +835,40 @@ async function envoyer(){
 $('msg').addEventListener('input',e=>{ e.target.style.height='48px'; e.target.style.height=Math.min(e.target.scrollHeight,140)+'px'; });
 $('msg').addEventListener('keydown',e=>{ if(e.key==='Enter'&&(e.metaKey||e.ctrlKey)) envoyer(); });
 
-/* Dictée vocale (Chrome / Android ; sur iPhone utilise le micro du clavier) */
+/* Dictée vocale. On demande d'abord l'accès micro pour déclencher la
+   demande d'autorisation, puis on annonce clairement chaque échec. */
 let reco=null;
-function dicter(){
+async function dicter(){
   const R = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if(!R){ toast('Utilise le micro de ton clavier'); $('msg').focus(); return; }
-  if(reco){ reco.stop(); reco=null; $('btn-mic').classList.remove('rec'); return; }
-  reco=new R(); reco.lang='fr-FR'; reco.continuous=true; reco.interimResults=true;
-  let base=$('msg').value;
-  reco.onresult=e=>{ let s=''; for(let i=0;i<e.results.length;i++) s+=e.results[i][0].transcript;
-    $('msg').value=(base?base+' ':'')+s; };
-  reco.onend=()=>{ reco=null; $('btn-mic').classList.remove('rec'); };
-  reco.onerror=()=>{ reco=null; $('btn-mic').classList.remove('rec'); };
-  reco.start(); $('btn-mic').classList.add('rec');
+  if(!R){ toast("Ce navigateur ne dicte pas — utilise le micro de ton clavier"); $('msg').focus(); return; }
+  if(reco){ try{ reco.stop(); }catch(e){} return; }
+  if(!window.isSecureContext){ toast('Dictée impossible hors HTTPS'); return; }
+  try{
+    if(navigator.mediaDevices && navigator.mediaDevices.getUserMedia){
+      const flux=await navigator.mediaDevices.getUserMedia({audio:true});
+      flux.getTracks().forEach(t=>t.stop());
+    }
+  }catch(e){ toast("Micro bloqué : autorise-le pour ce site"); return; }
+
+  reco=new R();
+  reco.lang='fr-FR'; reco.interimResults=true; reco.continuous=false; reco.maxAlternatives=1;
+  const base=$('msg').value.trim();
+  reco.onstart =()=>{ $('btn-mic').classList.add('rec'); toast('Je t\'écoute…'); };
+  reco.onresult=e=>{
+    let s=''; for(let k=0;k<e.results.length;k++) s+=e.results[k][0].transcript;
+    $('msg').value=(base?base+' ':'')+s;
+    $('msg').dispatchEvent(new Event('input'));
+  };
+  reco.onerror=ev=>{
+    const msg={'not-allowed':"Micro refusé : autorise-le pour ce site",
+               'service-not-allowed':"Dictée bloquée par le navigateur",
+               'no-speech':"Je n'ai rien entendu",
+               'audio-capture':"Aucun micro détecté",
+               'network':"Dictée indisponible : connexion requise"};
+    toast(msg[ev.error]||('Dictée : '+ev.error));
+  };
+  reco.onend  =()=>{ reco=null; $('btn-mic').classList.remove('rec'); };
+  try{ reco.start(); }catch(e){ reco=null; $('btn-mic').classList.remove('rec'); toast('Dictée impossible'); }
 }
 
 /* ============================================================
@@ -859,7 +884,7 @@ function ligneItem(it,rang){
     <span class="body">
       <span class="t">${esc(it.titre)}</span>
       <span class="meta">
-        <span class="chip">${esc(nomResto(it.restaurant_id))}</span>
+        ${perso(it)?'':`<span class="chip">${esc(nomResto(it.restaurant_id))}</span>`}
         <span class="chip">${CAT[it.categorie]?CAT[it.categorie].nom:'—'}</span>
         ${r}
         ${assigne?`<span class="chip">→ ${esc(assigne)}</span>`:''}
@@ -888,7 +913,7 @@ function renderPilotage(){
       <span class="cnt">${urg?`<span class="bubble a">${urg}</span>`:''}
       <span class="bubble n">${l.length}</span></span></button>`;
   }).join('') || `<div class="empty"><b>Aucun restaurant</b>Ajoute-les dans l'onglet Restaurants</div>`;
-  $('pil-cats').innerHTML = CATS.map(c=>{
+  $('pil-cats').innerHTML = CATS_RESTO.map(c=>{
     const n=ouv.filter(i=>i.categorie===c.id).length;
     return `<button class="cat ${n?'':'zero'}" onclick="ordreParCat('${c.id}')">
       <span class="g" style="color:${n?'var(--navy)':'var(--ink-3)'}">${c.g}</span>
@@ -911,7 +936,7 @@ function renderResto(){
   $('title').textContent=r.nom;
   const ouv=ouverts().filter(i=>concerne(i,r.id));
   $('subtitle').innerHTML=`${ouv.length} ouvert${ouv.length>1?'s':''}<br>${esc(r.zone||'')}`;
-  const tabs=[['apercu','Aperçu'],['equipe','Équipe'],...CATS.map(c=>[c.id,c.nom.split(' /')[0]]),['fait','Traités']];
+  const tabs=[['apercu','Aperçu'],['equipe','Équipe'],...CATS_RESTO.map(c=>[c.id,c.nom.split(' /')[0]]),['fait','Traités']];
   $('resto-tabs').innerHTML = tabs.map(([id,l])=>{
     let n='';
     if(id!=='apercu'&&id!=='equipe'&&id!=='fait') n=' '+ouv.filter(i=>i.categorie===id).length;
@@ -925,7 +950,7 @@ function renderResto(){
       + (t.length? t.map((it,i)=>ligneItem(it,i+1)).join('')
         : `<div class="empty"><b>Tout est à jour ici</b>Aucun sujet ouvert sur ce restaurant</div>`)
       + `<div class="section-h"><h2>Répartition</h2></div><div class="cats">`
-      + CATS.map(c=>{const n=ouv.filter(i=>i.categorie===c.id).length;
+      + CATS_RESTO.map(c=>{const n=ouv.filter(i=>i.categorie===c.id).length;
           return `<button class="cat ${n?'':'zero'}" onclick="setTab('${c.id}')">
             <span class="g" style="color:${n?'var(--navy)':'var(--ink-3)'}">${c.g}</span>
             <span class="n">${c.nom}</span><span class="c">${n}</span></button>`;}).join('')
@@ -971,7 +996,7 @@ function renderOrdre(){
     `<button class="tab ${S.filtreStatut==='ouvert'?'on':''}" onclick="setF('statut','ouvert')">Ouverts</button>
      <button class="tab ${S.filtreStatut==='fait'?'on':''}" onclick="setF('statut','fait')">Traités</button>
      <button class="tab ${S.filtreCat==='tout'?'on':''}" onclick="setF('cat','tout')">Tous sujets</button>`
-    + CATS.map(c=>`<button class="tab ${S.filtreCat===c.id?'on':''}" onclick="setF('cat','${c.id}')">${c.nom.split(' /')[0]}</button>`).join('');
+    + CATS_RESTO.map(c=>`<button class="tab ${S.filtreCat===c.id?'on':''}" onclick="setF('cat','${c.id}')">${c.nom.split(' /')[0]}</button>`).join('');
   $('ordre-list').innerHTML = (l.length
     ? l.map((it,i)=>ligneItem(it,S.filtreStatut==='fait'?0:i+1)).join('')
     : `<div class="empty"><b>Aucun résultat</b>Change de filtre ou note un nouveau sujet</div>`)
@@ -1086,8 +1111,8 @@ function openSheet(id){ $(id).classList.add('on'); }
 function closeSheet(id){ $(id).classList.remove('on'); }
 document.querySelectorAll('.sheet').forEach(s=>s.addEventListener('click',e=>{ if(e.target===s) s.classList.remove('on'); }));
 
-function optionsResto(sel,v){
-  sel.innerHTML=`<option value="" ${v==null?'selected':''}>Tous les restaurants</option>`
+function optionsResto(sel,v,sansResto){
+  sel.innerHTML=`<option value="" ${v==null?'selected':''}>${sansResto?'Sans restaurant':'Tous les restaurants'}</option>`
     +S.restos.map(r=>`<option value="${r.id}" ${r.id==v?'selected':''}>${esc(r.nom)}</option>`).join('');
 }
 function optionsVisibilite(val,assigne){
@@ -1116,7 +1141,7 @@ function optionsUser(sel,v){
 }
 function openItem(id,restoDefaut,catDefaut,opts){
   opts=opts||{};
-  if(!S.restos.length){ toast('Ajoute d\'abord un restaurant'); return go('restos'); }
+  if(!S.restos.length && !opts.prive && !id){ toast('Ajoute d\'abord un restaurant'); return go('restos'); }
   const it = id? S.items.find(x=>x.id==id) : null;
   S.editItem = it? it.id : null;
   S.actions  = it && Array.isArray(it.actions)? JSON.parse(JSON.stringify(it.actions)) : [];
@@ -1126,10 +1151,11 @@ function openItem(id,restoDefaut,catDefaut,opts){
   $('f-resp').value     = it? it.responsable||'' : '';
   S.echInit = {hz: it? horizonDe(it.echeance):'', iso: it? (it.echeance||null):null};
   $('f-echeance').innerHTML = optionsHorizon(S.echInit.hz);
-  optionsResto($('f-resto'), it? it.restaurant_id : (restoDefaut||S.resto||S.restos[0].id));
-  if(it && it.restaurant_id==null) $('f-resto').value='';
+  const estPerso = it? perso(it) : !!opts.prive;
+  optionsResto($('f-resto'), it? it.restaurant_id : (estPerso?null:(restoDefaut||S.resto||S.restos[0].id)), estPerso);
+  if(estPerso || (it && it.restaurant_id==null)) $('f-resto').value='';
   $('f-cat').innerHTML = CATS.map(c=>`<option value="${c.id}">${c.nom}</option>`).join('');
-  $('f-cat').value = it? it.categorie : (catDefaut||'probleme');
+  $('f-cat').value = it? it.categorie : (estPerso?'perso':(catDefaut||'probleme'));
   seg('f-prio',   PRIOS.map(p=>({v:p.v,l:p.l})), it? it.priorite:2);
   seg('f-statut', STATUTS.map(s=>({v:s,l:s})),   it? it.statut:'À traiter');
   optionsUser('f-assigne', it? it.assigne_id : null);
