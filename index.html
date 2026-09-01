@@ -5,6 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#B62123">
 <title>BKCO · Orga</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Orga">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <style>
 /* ===================================================================
    1. TOKENS  (identiques à BKCO Planning / BKCO Reporting)
@@ -369,6 +375,22 @@ textarea{min-height:84px;resize:vertical;font-size:15px;line-height:1.5}
   <button class="btn del" id="mb-suppr" onclick="delMembre()">Supprimer</button>
 </div></div>
 
+<div class="sheet" id="sh-user"><div class="card">
+  <div class="hd"><h2 id="user-h">Nouvel utilisateur</h2><button onclick="closeSheet('sh-user')">Fermer</button></div>
+  <label>Nom</label><input id="u-nom" placeholder="Prénom">
+  <div class="row">
+    <div><label>Rôle</label><select id="u-role">
+      <option>Direction</option><option>Superviseur</option><option>Directeur</option><option>Autre</option>
+    </select></div>
+    <div><label>Code d'accès</label><input id="u-pin" type="tel" inputmode="numeric" maxlength="6" placeholder="4 chiffres"></div>
+  </div>
+  <label>Accès</label>
+  <select id="u-actif"><option value="1">Actif</option><option value="0">Désactivé</option></select>
+  <div class="muted">Un compte désactivé ne peut plus se connecter, mais tout ce qu'il a noté reste en place.</div>
+  <button class="btn" onclick="saveUser()">Enregistrer</button>
+  <button class="btn del" id="ub-suppr" onclick="delUser()">Supprimer ce compte</button>
+</div></div>
+
 <div class="sheet" id="sh-resto"><div class="card">
   <div class="hd"><h2 id="resto-h">Nouveau restaurant</h2><button onclick="closeSheet('sh-resto')">Fermer</button></div>
   <label>Nom</label><input id="r-nom">
@@ -446,7 +468,7 @@ async function dbDelete(t,id){
 /* ============================================================
    4. ÉTAT
    ============================================================ */
-let S = {moi:null,users:[],restos:[],membres:[],items:[],view:'pilotage',resto:null,tab:'apercu',tabMoi:'perso',
+let S = {moi:null,users:[],tousUsers:[],editUser:null,restos:[],membres:[],items:[],view:'pilotage',resto:null,tab:'apercu',tabMoi:'perso',
          filtreCat:'tout',filtreStatut:'ouvert',editItem:null,editMembre:null,editResto:null,
          actions:[],chat:[],cid:0,echInit:{hz:'',iso:null}};
 
@@ -970,10 +992,14 @@ async function purger(portee){
   render();
   toast(ko? (l.length-ko)+' supprimés, '+ko+' en échec' : l.length+' sujet'+(l.length>1?'s':'')+' supprimé'+(l.length>1?'s':''));
 }
+function estAdmin(){ const r=((S.moi&&S.moi.role)||'').toLowerCase();
+  return r.includes('direction')||r.includes('admin'); }
 function renderMoi(){
   const T=[['perso','Personnel',mesPerso().filter(i=>i.statut!=='Fait').length],
            ['assignes',"Pour moi",mesAssignes().length],
            ['crees',"J'ai lancé",mesCrees().length]];
+  if(estAdmin()) T.push(['comptes','Comptes',S.tousUsers.length]);
+  if(S.tabMoi==='comptes'&&!estAdmin()) S.tabMoi='perso';
   $('moi-tabs').innerHTML=T.map(([id,l,n])=>
     `<button class="tab ${S.tabMoi===id?'on':''}" onclick="setTabMoi('${id}')">${l} ${n}</button>`).join('');
   const b=$('moi-body');
@@ -990,6 +1016,19 @@ function renderMoi(){
     const l=trie(mesAssignes());
     b.innerHTML=l.length? l.map((it,i)=>ligneItem(it,i+1)).join('')
       : `<div class="empty"><b>Rien ne t'attend</b>Les sujets qu'on t'assigne arrivent ici</div>`;
+  }
+  else if(S.tabMoi==='comptes'){
+    b.innerHTML = S.tousUsers.map(u=>{
+      const ini=(u.nom||'?').split(' ').map(x=>x[0]).slice(0,2).join('').toUpperCase();
+      const n=S.items.filter(i=>i.auteur_id==u.id||i.assigne_id==u.id).length;
+      return `<button class="membre" onclick="openUser(${u.id})">
+        <span class="ini">${ini}</span>
+        <span><span class="nm">${esc(u.nom)}${u.id==S.moi.id?' (toi)':''}</span><br>
+        <span class="po">${esc(u.role||'')} · code ${esc(u.pin||'—')}${u.actif===false?' · désactivé':''}</span></span>
+        ${n?`<span class="cnt"><span class="bubble n">${n}</span></span>`:''}</button>`;
+    }).join('')
+      + `<button class="btn sec" onclick="openUser()">Ajouter un utilisateur</button>`
+      + `<div class="muted" style="margin-top:10px">Le chiffre indique le nombre de sujets notés ou assignés à cette personne.</div>`;
   }
   else{
     const l=trie(mesCrees());
@@ -1160,6 +1199,47 @@ async function delMembre(){
 }
 
 /* ============================================================
+   10 bis. COMPTES (réservé à la direction)
+   ============================================================ */
+function openUser(id){
+  if(!estAdmin()) return;
+  const u=id? S.tousUsers.find(x=>x.id==id):null;
+  S.editUser=u?u.id:null;
+  $('user-h').textContent=u?'Compte':'Nouvel utilisateur';
+  $('u-nom').value=u?u.nom||'':'';
+  $('u-pin').value=u?u.pin||'':'';
+  const roles=['Direction','Superviseur','Directeur','Autre'];
+  const r=u&&u.role?u.role:'Superviseur';
+  $('u-role').innerHTML=[...new Set([...roles,r])].map(x=>`<option ${x===r?'selected':''}>${esc(x)}</option>`).join('');
+  $('u-actif').value=(u&&u.actif===false)?'0':'1';
+  $('ub-suppr').style.display=(u&&u.id!=S.moi.id)?'block':'none';
+  openSheet('sh-user');
+}
+async function saveUser(){
+  const nom=$('u-nom').value.trim(); if(!nom) return toast('Il manque le nom');
+  const pin=$('u-pin').value.replace(/\D/g,'');
+  if(pin.length<4) return toast('Le code doit faire au moins 4 chiffres');
+  if(S.tousUsers.some(u=>u.pin===pin && u.id!=S.editUser)) return toast('Ce code est déjà utilisé');
+  const row={nom,role:$('u-role').value,pin,actif:$('u-actif').value==='1'};
+  try{
+    if(S.editUser){ await dbUpdate('orga_utilisateurs',S.editUser,row); }
+    else{ await dbInsert('orga_utilisateurs',row); }
+    await charger();
+    if(S.editUser==S.moi.id){ S.moi.nom=row.nom; S.moi.role=row.role;
+      sess('bkco_orga_moi',JSON.stringify(S.moi)); }
+    closeSheet('sh-user'); render(); toast('Enregistré');
+  }catch(e){ toast('Erreur : '+e.message); }
+}
+async function delUser(){
+  if(!S.editUser||S.editUser==S.moi.id) return;
+  if(!confirm("Supprimer ce compte ?\n\nLes sujets qu'il a notés restent dans l'app, sans nom d'auteur.\nPour garder l'historique lisible, préfère le désactiver.")) return;
+  try{
+    await dbDelete('orga_utilisateurs',S.editUser);
+    await charger(); closeSheet('sh-user'); render(); toast('Compte supprimé');
+  }catch(e){ toast('Erreur : '+e.message); }
+}
+
+/* ============================================================
    11. MODALE RESTAURANT
    ============================================================ */
 function openResto(id){
@@ -1234,7 +1314,8 @@ async function charger(){
                                      dbList('orga_items'),dbList('orga_utilisateurs')]);
   S.restos=r.sort((a,b)=>(a.ordre||99)-(b.ordre||99));
   S.membres=m; S.items=i;
-  S.users=(u||[]).filter(x=>x.actif!==false).map(x=>({id:x.id,nom:x.nom,role:x.role}));
+  S.tousUsers=(u||[]).sort((a,b)=>(a.id||0)-(b.id||0));
+  S.users=S.tousUsers.filter(x=>x.actif!==false).map(x=>({id:x.id,nom:x.nom,role:x.role}));
   if(S.moi && !S.users.some(x=>x.id==S.moi.id)) S.users.unshift(S.moi);
 }
 async function demarrer(){
@@ -1254,16 +1335,6 @@ $('mode').textContent = CONFIGURE? '' : "Mode local : renseigne Supabase en haut
 (function(){ const s=sess('bkco_orga_moi');
   if(s){ try{ S.moi=JSON.parse(s); demarrer(); }catch(e){} } })();
 
-/* PWA */
-(function(){
-  const mf={name:'BKCO Orga',short_name:'Orga',start_url:'.',display:'standalone',
-    background_color:'#F4F5F7',theme_color:'#B62123',
-    icons:[{src:'data:image/svg+xml;base64,'+btoa('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192"><rect width="192" height="192" rx="42" fill="#B62123"/><text x="96" y="128" font-family="-apple-system,sans-serif" font-size="92" font-weight="700" fill="#FFFFFF" text-anchor="middle">O</text></svg>'),
-      sizes:'192x192',type:'image/svg+xml',purpose:'any'}]};
-  const l=document.createElement('link'); l.rel='manifest';
-  l.href=URL.createObjectURL(new Blob([JSON.stringify(mf)],{type:'application/json'}));
-  document.head.appendChild(l);
-})();
 </script>
 </body>
 </html>
