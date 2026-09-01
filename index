@@ -1,0 +1,1244 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#B62123">
+<title>BKCO · Orga</title>
+<style>
+/* ===================================================================
+   1. TOKENS  (identiques à BKCO Planning / BKCO Reporting)
+   =================================================================== */
+:root{
+  /* Rouge BKCO, relevé sur le logo. Il porte l'identité : bandeau,
+     onglet actif, écran d'accès. */
+  --navy:#B62123;      --navy-2:#9A1A1D;   --navy-3:#C9494B;
+  /* Ambre : appels à l'action et avertissements. Jamais l'identité. */
+  --orange:#D97706;    --orange-pale:#FDF1E1;
+  --rouge-pale:#FBEAEA;
+  --paper:#F4F5F7;     --card:#FFFFFF;
+  --ink:#111827;       --ink-2:#4B5563;    --ink-3:#9AA3AF;
+  --line:#E2E5EA;
+  /* Couleurs de statut assombries pour tenir le contraste minimum de
+     4.5 sur leur fond pâle : ce sont de petites étiquettes, elles doivent
+     rester lisibles sur un écran de téléphone en plein jour. */
+  --open:#1B7943;      --open-bg:#E2F4E9;
+  --close:#C0372D;     --close-bg:#FCE9E7;
+  --nuit:#4C3A8C;      --nuit-bg:#EBE6F7;
+  --presence:#1463DD;  --presence-bg:#E3EDFD;
+  --off:#646B78;       --off-bg:#EDEFF2;
+  --vacances:#9C5D00;  --vacances-bg:#FCEFD9;
+  --absence:#B03060;   --absence-bg:#FAE5ED;
+  --inconnu:#8A8F98;   --inconnu-bg:#F0F0F2;
+  --r:12px;
+  --bas:calc(58px + env(safe-area-inset-bottom));
+  --font:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Inter",sans-serif;
+  /* Correspondances utilisées par le code d'Orga */
+  --flame:var(--navy); --txt:var(--ink); --txt-2:var(--ink-3);
+  --alert:var(--close); --warn:var(--vacances); --ok:var(--open); --cool:var(--presence);
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{font-family:var(--font);background:var(--paper);color:var(--ink);font-size:15px;
+     -webkit-font-smoothing:antialiased;overscroll-behavior-y:none;
+     padding-bottom:calc(var(--bas) + 18px);line-height:1.45}
+button{font-family:inherit;font-size:inherit;cursor:pointer;border:none;background:none;color:inherit}
+input,select,textarea{font-family:inherit;font-size:16px;color:var(--ink)} /* 16px : évite le zoom auto iOS */
+h1,h2,h3{font-weight:700;letter-spacing:-.01em}
+a{color:var(--navy)}
+:focus-visible{outline:2px solid var(--navy);outline-offset:2px;border-radius:6px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+/* ===================================================================
+   2. BANDEAU + STRUCTURE
+   =================================================================== */
+.topbar{position:sticky;top:0;z-index:40;background:var(--navy);color:#fff;
+  padding:calc(11px + env(safe-area-inset-top)) 16px 11px;display:flex;align-items:center;gap:12px}
+.topbar h1{font-size:20px;line-height:1.15}
+.topbar .sub{font-size:11.5px;color:rgba(255,255,255,.82);margin-left:auto;text-align:right;line-height:1.3}
+.topbar .out{color:rgba(255,255,255,.9);font-size:17px;padding:2px 0 2px 4px}
+.wrap{padding:14px 14px 0;max-width:820px;margin:0 auto}
+.screen{display:none}
+.screen.on{display:block;animation:fade .16s ease}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+
+.nav{position:fixed;left:0;right:0;bottom:0;z-index:50;display:flex;
+  background:var(--card);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom)}
+.nav button{flex:1;padding:8px 2px 9px;display:flex;flex-direction:column;align-items:center;gap:3px;
+  color:var(--ink-3);font-size:10.5px;font-weight:500}
+.nav button .g{font-size:18px;line-height:1}
+.nav button.on{color:var(--navy);font-weight:600}
+.fab{position:fixed;right:16px;bottom:calc(var(--bas) + 16px);z-index:55;
+  width:54px;height:54px;border-radius:50%;background:var(--orange);color:#fff;
+  font-size:24px;line-height:1;box-shadow:0 6px 18px rgba(217,119,6,.34);
+  display:flex;align-items:center;justify-content:center}
+.fab.hide{display:none}
+
+/* ===================================================================
+   3. BLOCS
+   =================================================================== */
+.panel{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:14px;margin-bottom:12px}
+.section-h{display:flex;align-items:baseline;gap:10px;margin:20px 0 9px}
+.section-h h2{font-size:16px}
+.section-h span{font-size:12px;color:var(--ink-3)}
+.muted{color:var(--ink-3);font-size:13px}
+.empty{padding:26px 16px;text-align:center;color:var(--ink-3);font-size:13.5px;
+  background:var(--card);border:1px dashed var(--line);border-radius:var(--r)}
+.empty b{display:block;color:var(--ink);font-size:15px;font-weight:600;margin-bottom:4px}
+
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:11px 8px;text-align:center}
+.kpi .n{font-size:24px;font-weight:700;line-height:1;letter-spacing:-.02em}
+.kpi .l{font-size:10.5px;color:var(--ink-3);margin-top:4px;line-height:1.2}
+.kpi.a .n{color:var(--close)} .kpi.w .n{color:var(--vacances)} .kpi.o .n{color:var(--open)}
+
+/* ---- ligne de sujet ---- */
+.item{display:flex;background:var(--card);border:1px solid var(--line);
+  border-radius:var(--r);overflow:hidden;margin-bottom:8px;width:100%;text-align:left;align-items:stretch}
+.item .rail{width:5px;flex:0 0 5px;background:var(--ink-3)}
+.item .rank{flex:0 0 32px;display:flex;align-items:center;justify-content:center;
+  font-size:14px;font-weight:700;color:var(--ink-3);border-right:1px solid var(--line)}
+.item .body{flex:1;padding:10px 12px;min-width:0}
+.item .t{font-weight:500;font-size:14.5px;line-height:1.3;word-break:break-word}
+.item .meta{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}
+.item.done .t{color:var(--ink-3);text-decoration:line-through}
+.chip{font-size:10.5px;padding:2px 7px;border-radius:999px;background:var(--off-bg);color:var(--off);
+  white-space:nowrap;font-weight:500}
+.chip.late,.chip.p1{background:var(--close-bg);color:var(--close)}
+.chip.now{background:var(--presence-bg);color:var(--presence)}
+.chip.blk{background:var(--vacances-bg);color:var(--vacances)}
+.chip.ok{background:var(--open-bg);color:var(--open)}
+
+.resto{display:flex;align-items:center;gap:12px;width:100%;background:var(--card);
+  border:1px solid var(--line);border-radius:var(--r);padding:13px 14px;margin-bottom:8px;text-align:left}
+.resto .nm{font-size:15.5px;font-weight:600}
+.resto .zn{font-size:11.5px;color:var(--ink-3)}
+.resto .cnt{margin-left:auto;display:flex;gap:6px;align-items:center}
+.bubble{min-width:26px;height:24px;padding:0 7px;border-radius:7px;display:flex;align-items:center;
+  justify-content:center;font-size:13px;font-weight:700}
+.bubble.a{background:var(--close-bg);color:var(--close)}
+.bubble.n{background:var(--off-bg);color:var(--off)}
+
+.cats{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.cat{display:flex;align-items:center;gap:9px;background:var(--card);border:1px solid var(--line);
+  border-radius:var(--r);padding:11px;text-align:left}
+.cat .g{font-size:17px}
+.cat .n{font-size:12.5px;font-weight:500;line-height:1.2}
+.cat .c{margin-left:auto;font-size:16px;font-weight:700}
+.cat.zero .n,.cat.zero .c{color:var(--ink-3)}
+
+.tabs{display:flex;gap:6px;margin:0 0 12px;overflow-x:auto;scrollbar-width:none;padding-bottom:2px}
+.tabs::-webkit-scrollbar{display:none}
+.tab{padding:7px 13px;border-radius:999px;background:var(--card);border:1px solid var(--line);
+  font-size:13px;color:var(--ink-2);white-space:nowrap}
+.tab.on{background:var(--navy);border-color:var(--navy);color:#fff;font-weight:600}
+
+.membre{display:flex;align-items:center;gap:11px;background:var(--card);border:1px solid var(--line);
+  border-radius:var(--r);padding:11px 13px;margin-bottom:8px;width:100%;text-align:left}
+.ini{flex:0 0 34px;height:34px;border-radius:9px;background:var(--rouge-pale);display:flex;align-items:center;
+  justify-content:center;font-weight:700;font-size:13px;color:var(--navy)}
+.membre .nm{font-size:14.5px;font-weight:500}
+.membre .po{font-size:11.5px;color:var(--ink-3)}
+
+/* ===================================================================
+   4. CAPTURE
+   =================================================================== */
+#s-capture{display:none;flex-direction:column;
+  height:calc(100vh - 112px - env(safe-area-inset-top) - env(safe-area-inset-bottom))}
+#s-capture.on{display:flex}
+#chat-flux{flex:1;overflow-y:auto;padding-bottom:10px}
+.bulle{max-width:88%;padding:10px 13px;border-radius:16px;margin-bottom:9px;font-size:14.5px;
+  line-height:1.45;word-break:break-word;white-space:pre-wrap}
+.bulle.moi{background:var(--navy);color:#fff;margin-left:auto;border-bottom-right-radius:5px;font-weight:500}
+.bulle.app{background:var(--card);border:1px solid var(--line);border-bottom-left-radius:5px;color:var(--ink-2)}
+.bulle.app b{color:var(--ink)}
+.bulle.app.fait{background:var(--open-bg);border-color:#BFE5CE;color:#146035}
+.bulle.app.fait b{color:#146035}
+.carte{background:var(--card);border:1px solid var(--orange);border-radius:16px;border-bottom-left-radius:5px;
+  padding:13px;margin-bottom:10px;max-width:100%}
+.carte input.ct{width:100%;background:transparent;border:none;padding:0 0 4px;font-weight:600;font-size:15px}
+.carte input.ct:focus{outline:none;border-bottom:1px solid var(--orange)}
+.carte .who{font-size:12px;color:var(--navy);font-weight:500;margin-bottom:9px}
+.carte .grid{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+.carte select,.carte input[type=date]{background:var(--paper);border:1px solid var(--line);border-radius:9px;
+  padding:8px 9px;font-size:13px;width:100%}
+.carte .doute{border-color:var(--orange);background:var(--orange-pale)}
+.carte .acts2{display:flex;gap:7px;margin-top:11px}
+.carte .acts2 button{flex:1;padding:10px;border-radius:10px;font-size:13.5px;font-weight:600}
+.carte .ok2{background:var(--orange);color:#fff}
+.carte .no2{background:var(--off-bg);color:var(--ink-2);flex:0 0 40%}
+.saisie{display:flex;gap:8px;align-items:flex-end;padding:10px 0 6px;
+  border-top:1px solid var(--line);background:var(--paper)}
+.saisie textarea{flex:1;min-height:44px;max-height:150px;border-radius:14px;padding:11px 14px;resize:none;
+  background:var(--card);border:1px solid var(--line)}
+.saisie button{flex:0 0 44px;height:44px;border-radius:50%;background:var(--orange);color:#fff;
+  font-size:18px;display:flex;align-items:center;justify-content:center}
+.saisie button.mic{background:var(--card);border:1px solid var(--line);color:var(--ink-2)}
+.saisie button.mic.rec{background:var(--close);border-color:var(--close);color:#fff}
+
+/* ===================================================================
+   5. FORMULAIRES
+   =================================================================== */
+.sheet{position:fixed;inset:0;z-index:90;background:rgba(17,24,39,.45);display:none;align-items:flex-end}
+.sheet.on{display:flex}
+.sheet .card{background:var(--paper);width:100%;max-height:94vh;overflow-y:auto;
+  border-radius:18px 18px 0 0;padding:16px 16px calc(24px + env(safe-area-inset-bottom));
+  animation:up .2s ease}
+@media(min-width:700px){.sheet{align-items:center;justify-content:center}
+  .sheet .card{max-width:620px;border-radius:var(--r);animation:none}}
+@keyframes up{from{transform:translateY(26px)}to{transform:translateY(0)}}
+.sheet h2{font-size:18px}
+.sheet .hd{display:flex;align-items:center;margin-bottom:12px}
+.sheet .hd button{color:var(--ink-3);font-size:14px;margin-left:auto;padding:4px 6px}
+label{display:block;font-size:12px;color:var(--ink-2);margin:12px 0 5px;font-weight:500}
+input,select,textarea{width:100%;background:var(--card);border:1px solid var(--line);border-radius:10px;
+  padding:11px 12px;outline:none}
+input:focus,select:focus,textarea:focus{border-color:var(--navy)}
+textarea{min-height:84px;resize:vertical;font-size:15px;line-height:1.5}
+.row{display:flex;gap:9px}.row>*{flex:1}
+.seg{display:flex;gap:6px;flex-wrap:wrap}
+.seg button{flex:1;min-width:70px;padding:9px 6px;border-radius:10px;background:var(--card);
+  border:1px solid var(--line);font-size:12.5px;color:var(--ink-2)}
+.seg button.on{border-color:var(--navy);background:var(--rouge-pale);color:var(--navy);font-weight:600}
+.btn{display:block;width:100%;padding:13px;border-radius:var(--r);background:var(--orange);color:#fff;
+  font-weight:600;font-size:15px;margin-top:16px}
+.btn.sec{background:var(--card);border:1px solid var(--line);color:var(--ink)}
+.btn.del{background:var(--card);color:var(--close);border:1px solid #F0C7C2;margin-top:9px}
+.acts{margin-top:6px}
+.act{display:flex;align-items:center;gap:9px;padding:8px 0;border-bottom:1px solid var(--line);font-size:14px}
+.act input[type=checkbox]{width:19px;height:19px;flex:0 0 19px;accent-color:var(--navy)}
+.act.done span{color:var(--ink-3);text-decoration:line-through}
+.act button{margin-left:auto;color:var(--ink-3);font-size:17px;padding:0 4px}
+
+/* ===================================================================
+   6. ACCÈS
+   =================================================================== */
+#login{position:fixed;inset:0;z-index:100;background:var(--navy);color:#fff;display:flex;
+  flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center}
+#login .mark{font-size:38px;font-weight:800;line-height:1;letter-spacing:-.02em}
+#login .mark em{font-style:normal;color:rgba(255,255,255,.72);font-weight:600}
+#login p{color:rgba(255,255,255,.8);font-size:13.5px;margin:10px 0 26px}
+#login input{max-width:210px;text-align:center;font-size:24px;letter-spacing:.35em;padding:13px;
+  background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.32);color:#fff}
+#login input::placeholder{color:rgba(255,255,255,.5)}
+#login .err{font-size:13px;height:18px;margin-top:10px;color:#FFD9D5}
+.badge-mode{font-size:11px;color:rgba(255,255,255,.7);margin-top:20px;max-width:320px}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(var(--bas) + 22px);
+  background:var(--ink);color:#fff;padding:10px 16px;border-radius:10px;
+  font-size:13.5px;z-index:120;opacity:0;pointer-events:none;transition:opacity .2s;
+  box-shadow:0 6px 20px rgba(17,24,39,.25)}
+.toast.on{opacity:1}
+.searchbar{display:flex;gap:8px;margin-bottom:10px}
+.searchbar input{flex:1}
+</style>
+</head>
+<body>
+
+<div id="login">
+  <div class="mark">BKCO<br><em>Orga</em></div>
+  <p>Le poste de pilotage des restaurants</p>
+  <input id="pin" type="tel" inputmode="numeric" maxlength="6" placeholder="••••" autocomplete="off">
+  <div class="err" id="pinErr"></div>
+  <div class="badge-mode" id="mode"></div>
+</div>
+
+<div class="topbar">
+  <h1 id="title">Pilotage</h1>
+  <div class="sub" id="subtitle"></div>
+  <button class="out" onclick="logout()" aria-label="Quitter">⏻</button>
+</div>
+
+<div class="wrap">
+
+  <!-- ══════════ CAPTURE ══════════ -->
+  <section class="screen" id="s-capture">
+    <div id="chat-flux"></div>
+    <div class="saisie">
+      <button class="mic" id="btn-mic" onclick="dicter()" aria-label="Dicter">🎙</button>
+      <textarea id="msg" rows="1" placeholder="Dis ce que tu as en tête…"></textarea>
+      <button onclick="envoyer()" aria-label="Envoyer">↑</button>
+    </div>
+  </section>
+
+  <!-- ══════════ PILOTAGE ══════════ -->
+  <section class="screen on" id="s-pilotage">
+    <div class="kpis">
+      <div class="kpi"><div class="n" id="k-ouv">0</div><div class="l">Ouverts</div></div>
+      <div class="kpi a"><div class="n" id="k-ret">0</div><div class="l">En retard</div></div>
+      <div class="kpi w"><div class="n" id="k-p1">0</div><div class="l">Critiques</div></div>
+      <div class="kpi o"><div class="n" id="k-fait">0</div><div class="l">Traités 30j</div></div>
+    </div>
+    <div class="section-h"><h2>À traiter aujourd'hui</h2><span>par ordre de priorité</span></div>
+    <div id="top-list"></div>
+    <div class="section-h"><h2>Par restaurant</h2></div>
+    <div id="pil-restos"></div>
+    <div class="section-h"><h2>Par sujet</h2></div>
+    <div class="cats" id="pil-cats"></div>
+  </section>
+
+  <!-- ══════════ RESTAURANTS ══════════ -->
+  <section class="screen" id="s-restos">
+    <div id="resto-list"></div>
+    <button class="btn sec" onclick="openResto()">Ajouter un restaurant</button>
+  </section>
+
+  <!-- ══════════ FICHE RESTAURANT ══════════ -->
+  <section class="screen" id="s-resto">
+    <button class="tab" style="margin-bottom:12px" onclick="go('restos')">‹ Tous les restaurants</button>
+    <div class="tabs" id="resto-tabs"></div>
+    <div id="resto-body"></div>
+  </section>
+
+  <!-- ══════════ ORDRE ══════════ -->
+  <section class="screen" id="s-ordre">
+    <div class="searchbar">
+      <input id="q" placeholder="Rechercher un sujet, un nom…" oninput="renderOrdre()">
+      <button class="tab" onclick="exportCSV()">Export</button>
+    </div>
+    <div class="tabs" id="ordre-filtres"></div>
+    <div id="ordre-list"></div>
+  </section>
+
+  <!-- ══════════ MES TÂCHES ══════════ -->
+  <section class="screen" id="s-moi">
+    <div class="tabs" id="moi-tabs"></div>
+    <div id="moi-body"></div>
+  </section>
+
+</div>
+
+<nav class="nav">
+  <button data-v="capture" onclick="go('capture')"><span class="g">✎</span>Capture</button>
+  <button data-v="pilotage" class="on" onclick="go('pilotage')"><span class="g">◈</span>Pilotage</button>
+  <button data-v="restos" onclick="go('restos')"><span class="g">▦</span>Restos</button>
+  <button data-v="ordre" onclick="go('ordre')"><span class="g">≡</span>Ordre</button>
+  <button data-v="moi" onclick="go('moi')"><span class="g">◑</span>Moi</button>
+</nav>
+<button class="fab" id="fab" onclick="go('capture')" aria-label="Noter un sujet">✎</button>
+
+<!-- ══════════ MODALES ══════════ -->
+<div class="sheet" id="sh-item"><div class="card">
+  <div class="hd"><h2 id="item-h">Nouveau sujet</h2><button onclick="closeSheet('sh-item')">Fermer</button></div>
+  <label>Sujet</label>
+  <input id="f-titre" placeholder="Ex : Friteuse 2 en panne">
+  <div class="row">
+    <div><label>Restaurant</label><select id="f-resto"></select></div>
+    <div><label>Échéance</label><input id="f-echeance" type="date"></div>
+  </div>
+  <label>Catégorie</label>
+  <select id="f-cat"></select>
+  <label>Priorité</label>
+  <div class="seg" id="f-prio"></div>
+  <label>Statut</label>
+  <div class="seg" id="f-statut"></div>
+  <div class="row">
+    <div><label>Qui s'en occupe</label><input id="f-resp" placeholder="Nom"></div>
+    <div><label>Personne concernée</label><select id="f-membre"></select></div>
+  </div>
+  <div class="row">
+    <div><label>Assigné à</label><select id="f-assigne"></select></div>
+    <div><label>Visibilité</label><select id="f-prive">
+      <option value="0">Toute l'équipe</option><option value="1">Personnel</option></select></div>
+  </div>
+  <label>Détail</label>
+  <textarea id="f-desc" placeholder="Contexte, ce qui a déjà été fait, ce qui bloque…"></textarea>
+  <label>Étapes</label>
+  <div class="acts" id="f-actions"></div>
+  <div class="row" style="margin-top:8px">
+    <input id="f-newact" placeholder="Ajouter une étape">
+    <button class="tab" style="flex:0 0 auto" onclick="addAction()">Ajouter</button>
+  </div>
+  <button class="btn" onclick="saveItem()">Enregistrer</button>
+  <button class="btn sec" id="b-clore" onclick="cloreItem()">Marquer comme traité</button>
+  <button class="btn del" id="b-suppr" onclick="delItem()">Supprimer</button>
+</div></div>
+
+<div class="sheet" id="sh-membre"><div class="card">
+  <div class="hd"><h2 id="membre-h">Nouveau collaborateur</h2><button onclick="closeSheet('sh-membre')">Fermer</button></div>
+  <label>Nom et prénom</label><input id="m-nom">
+  <div class="row">
+    <div><label>Poste</label><select id="m-poste"></select></div>
+    <div><label>Contrat</label><select id="m-contrat"></select></div>
+  </div>
+  <div class="row">
+    <div><label>Entrée</label><input id="m-entree" type="date"></div>
+    <div><label>Statut</label><select id="m-statut"></select></div>
+  </div>
+  <label>Points de suivi</label>
+  <textarea id="m-notes" placeholder="Formation en cours, entretien à prévoir, point de vigilance…"></textarea>
+  <button class="btn" onclick="saveMembre()">Enregistrer</button>
+  <button class="btn del" id="mb-suppr" onclick="delMembre()">Supprimer</button>
+</div></div>
+
+<div class="sheet" id="sh-resto"><div class="card">
+  <div class="hd"><h2 id="resto-h">Nouveau restaurant</h2><button onclick="closeSheet('sh-resto')">Fermer</button></div>
+  <label>Nom</label><input id="r-nom">
+  <label>Zone</label><input id="r-zone" placeholder="Côte d'Opale, Amiénois…">
+  <label>Autres appellations</label>
+  <input id="r-alias" placeholder="acv, amiens cv, centre ville">
+  <div class="muted">Séparées par des virgules : c'est ce qui permet de reconnaître le restaurant quand tu dictes.</div>
+  <button class="btn" onclick="saveResto()">Enregistrer</button>
+  <button class="btn del" id="rb-suppr" onclick="delResto()">Supprimer</button>
+</div></div>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => (s==null?'':s.toString()).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+/* ============================================================
+   1. CONFIGURATION
+   ============================================================ */
+const SUPABASE_URL = 'https://sb_publishable_EzrGCV5ZcmPBZIsy5nm9pw_AuShqMkv.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdvcWF1eWFsc2lxdG1jYnlqZHJlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgyNTA2ODIsImV4cCI6MjEwMzgyNjY4Mn0.sCRfbjUvYPKJxzUHG7lsitesgiBHwRtMmpVvAjd_CZQ';
+const PIN_SECOURS  = '1234';
+const API_PARSE    = '/api/parse';   // fonction Vercel ; si absente, analyse locale
+
+/* ============================================================
+   2. RÉFÉRENTIELS
+   ============================================================ */
+const CATS = [
+  {id:'probleme',    nom:'Problèmes / incidents',   g:'▲', poids:25},
+  {id:'equipe',      nom:'Équipe / RH',             g:'●', poids:18},
+  {id:'maintenance', nom:'Maintenance / technique', g:'✦', poids:20},
+  {id:'hygiene',     nom:'Hygiène / sécurité',      g:'■', poids:30},
+  {id:'organisation',nom:'Organisation / process',  g:'◆', poids:6},
+  {id:'commercial',  nom:'Commercial / client',     g:'★', poids:12},
+  {id:'admin',       nom:'Admin / finance',         g:'▤', poids:10},
+  {id:'travaux',     nom:'Travaux / investissement',g:'⬔', poids:6}
+];
+const CAT = Object.fromEntries(CATS.map(c=>[c.id,c]));
+const PRIOS    = [{v:1,l:'Critique'},{v:2,l:'Important'},{v:3,l:'À suivre'}];
+const STATUTS  = ['À traiter','En cours','En attente','Bloqué','Fait'];
+const POSTES   = ['Directeur','Directeur adjoint','Manager','Leader','Équipier','Alternant','Autre'];
+const CONTRATS = ['CDI','CDD','Alternance','Extra','Stage'];
+const ST_MEMBRE= ['Actif','En formation','Arrêt','En préavis','Sorti'];
+
+/* ============================================================
+   3. STOCKAGE
+   ============================================================ */
+const CONFIGURE = !SUPABASE_URL.includes('XXXX');
+const SB = CONFIGURE ? supabase.createClient(SUPABASE_URL, SUPABASE_KEY) : null;
+let mem = {orga_restaurants:[],orga_membres:[],orga_items:[],
+  orga_utilisateurs:[{id:1,nom:'Moi',pin:'1234',role:'admin',actif:true}]};
+function lsGet(){ try{ const r=localStorage.getItem('bkco_orga'); if(r) mem=JSON.parse(r); }catch(e){} }
+function lsSet(){ try{ localStorage.setItem('bkco_orga',JSON.stringify(mem)); }catch(e){} }
+
+async function dbList(t){
+  if(SB){ const {data,error}=await SB.from(t).select('*'); if(error) throw error; return data||[]; }
+  return mem[t].slice();
+}
+async function dbInsert(t,row){
+  if(SB){ const {data,error}=await SB.from(t).insert(row).select().single(); if(error) throw error; return data; }
+  const r={...row,id:Date.now()+Math.floor(Math.random()*999),created_at:new Date().toISOString()};
+  mem[t].push(r); lsSet(); return r;
+}
+async function dbUpdate(t,id,patch){
+  if(SB){ const {data,error}=await SB.from(t).update(patch).eq('id',id).select().single(); if(error) throw error; return data; }
+  const i=mem[t].findIndex(x=>x.id==id); if(i>=0){ mem[t][i]={...mem[t][i],...patch}; lsSet(); return mem[t][i]; }
+}
+async function dbDelete(t,id){
+  if(SB){ const {error}=await SB.from(t).delete().eq('id',id); if(error) throw error; return; }
+  mem[t]=mem[t].filter(x=>x.id!=id); lsSet();
+}
+
+/* ============================================================
+   4. ÉTAT
+   ============================================================ */
+let S = {moi:null,users:[],restos:[],membres:[],items:[],view:'pilotage',resto:null,tab:'apercu',tabMoi:'perso',
+         filtreCat:'tout',filtreStatut:'ouvert',editItem:null,editMembre:null,editResto:null,
+         actions:[],chat:[],cid:0};
+
+/* ============================================================
+   5. ORDRE DE TRAITEMENT
+   ============================================================ */
+function jours(d){ if(!d) return null;
+  const a=new Date(d+'T00:00:00'), b=new Date(); b.setHours(0,0,0,0);
+  return Math.round((a-b)/86400000);
+}
+function anciennete(it){
+  if(!it.created_at) return 0;
+  return Math.max(0,Math.round((Date.now()-new Date(it.created_at))/86400000));
+}
+function score(it){
+  if(it.statut==='Fait') return -1;
+  let s = it.priorite==1?100:it.priorite==2?60:30;
+  s += (CAT[it.categorie]?CAT[it.categorie].poids:0);
+  const j = jours(it.echeance);
+  if(j!==null){
+    if(j<0)       s += 80 + Math.min(-j,25);
+    else if(j<=1) s += 55;
+    else if(j<=3) s += 38;
+    else if(j<=7) s += 20;
+  }
+  s += Math.min(anciennete(it),30)*1.2;
+  if(it.statut==='Bloqué')   s += 25;
+  if(it.statut==='En cours') s += 12;
+  if(it.statut==='En attente') s -= 8;
+  return Math.round(s);
+}
+function raisons(it){
+  const out=[]; const j=jours(it.echeance);
+  if(j!==null && j<0) out.push(['late','Retard '+(-j)+' j']);
+  else if(j===0)      out.push(['late',"Pour aujourd'hui"]);
+  else if(j!==null && j<=3) out.push(['blk','Dans '+j+' j']);
+  if(it.priorite==1)  out.push(['p1','Critique']);
+  if(it.statut==='Bloqué')     out.push(['blk','Bloqué']);
+  if(it.statut==='En cours')   out.push(['now','En cours']);
+  if(it.statut==='En attente') out.push(['','En attente']);
+  if(it.statut==='Fait')       out.push(['ok','Traité']);
+  const a=anciennete(it);
+  if(a>=21 && it.statut!=='Fait') out.push(['','Ouvert depuis '+a+' j']);
+  return out;
+}
+function couleur(it){
+  if(it.statut==='Fait') return 'var(--ok)';
+  const j=jours(it.echeance);
+  if(it.priorite==1 || (j!==null&&j<0)) return 'var(--alert)';
+  if(it.statut==='Bloqué' || (j!==null&&j<=3)) return 'var(--warn)';
+  if(it.statut==='En cours') return 'var(--cool)';
+  return 'var(--txt-2)';
+}
+/* Les sujets personnels n'apparaissent que dans l'onglet Moi de leur auteur. */
+const visibles = ()=> S.items.filter(i=>!i.prive);
+const ouverts  = ()=> visibles().filter(i=>i.statut!=='Fait');
+const nomUser  = id => { const u=S.users.find(x=>x.id==id); return u?u.nom:null; };
+function mesPerso(){ return S.items.filter(i=>i.prive && i.auteur_id==S.moi.id); }
+function mesAssignes(){ return S.items.filter(i=>!i.prive && i.assigne_id==S.moi.id && i.statut!=='Fait'); }
+function mesCrees(){ return S.items.filter(i=>!i.prive && i.auteur_id==S.moi.id && i.assigne_id!=S.moi.id && i.statut!=='Fait'); }
+const trie    = arr => arr.slice().sort((a,b)=>score(b)-score(a));
+const nomResto= id => { const r=S.restos.find(x=>x.id==id); return r?r.nom:'—'; };
+function rangDansFile(id){ return trie(ouverts()).findIndex(i=>i.id==id)+1; }
+
+/* ============================================================
+   6. ANALYSE DU LANGAGE NATUREL
+   ============================================================ */
+const norm = s => (s||'').toString().toLowerCase()
+  .normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[’']/g," ").replace(/\s+/g,' ').trim();
+
+const ALIAS_INTERNES = {
+  'amiens centre-ville':['acv','amiens cv','amiens centre','centre ville','centre-ville'],
+  'amiens nord':['amiens nord','ann'],
+  'amiens sud':['amiens sud','asud','ams'],
+  'boulogne saint-martin':['bsm','boulogne','saint martin','st martin'],
+  'mers-les-bains':['mers','mers les bains'],
+  'berck':['berck','berck sur mer'],
+  'abbeville':['abbeville'],
+  'siège / gescor':['siege','gescor','bureau','holding','siege social']
+};
+function aliasResto(r){
+  const base = norm(r.nom);
+  let l = [base];
+  (ALIAS_INTERNES[base]||[]).forEach(a=>l.push(norm(a)));
+  (r.alias||'').split(',').forEach(a=>{ a=norm(a); if(a) l.push(a); });
+  base.split(/[ \-]/).forEach(w=>{ if(w.length>=5) l.push(w); });
+  return [...new Set(l)].filter(Boolean);
+}
+function detectResto(t){
+  let best=null, len=0;
+  S.restos.forEach(r=>aliasResto(r).forEach(a=>{
+    if(a.length>len && new RegExp('(^|[^a-z])'+a.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')).test(t)){ best=r.id; len=a.length; }
+  }));
+  return best;
+}
+function detectMembre(t){
+  let best=null, len=0;
+  S.membres.forEach(m=>{
+    const n=norm(m.nom); if(!n) return;
+    const cles=[n,...n.split(' ').filter(w=>w.length>=4)];
+    cles.forEach(c=>{
+      if(c.length>len && new RegExp('(^|[^a-z])'+c+'([^a-z]|$)').test(t)){ best=m; len=c.length; }
+    });
+  });
+  return best;
+}
+const MOTS = {
+  hygiene:['hygiene','dlc','temperature','audit','haccp','nuisible','vermine','cafard','souris','extincteur','accident du travail','blessure','securite','tracabilite','contamination','inspection'],
+  maintenance:['panne','en panne','hs','fuite','casse','friteuse','four','frigo','chambre froide','clim','climatisation','camera','video','videosurveillance','porte','plomberie','electri','chauffe','machine','broyeur','tireuse','borne','kiosk','ecran','wifi','reseau','ballon','vitrine','toilettes','ventilation','maintenance','depannage','technicien'],
+  equipe:['salarie','equipier','manager','directeur','directrice','adjoint','contrat','absence','arret','abandon de poste','retard','entretien','recrut','demission','licenc','conges','formation','disciplinaire','avertissement','paie','pointage','planning','remplacement','integration','turnover','embauche'],
+  commercial:['client','avis','google','reclamation','plainte','uber','deliveroo','livraison','promo','operation','drive','ticket moyen','satisfaction','mystere'],
+  admin:['facture','fournisseur','compta','banque','assurance','bail','declaration','urssaf','tva','impot','redevance','royalt','budget','tresorerie'],
+  travaux:['travaux','devis','renovation','peinture','parking','enseigne','terrasse','investissement','amenagement','permis','architecte'],
+  organisation:['process','procedure','organiser','reunion','planifier','mettre en place','checklist','suivi','demander','appeler','relancer','commander','envoyer','preparer','mail','point avec','acces']
+};
+function detectCat(t){
+  let best=null, sc=0;
+  for(const [cat,mots] of Object.entries(MOTS)){
+    let n=0; mots.forEach(m=>{ if(t.includes(m)) n += m.length>6?2:1; });
+    if(n>sc){ sc=n; best=cat; }
+  }
+  if(!best) best = /probleme|souci|incident|pb |litige|conflit/.test(t) ? 'probleme' : 'organisation';
+  return best;
+}
+function detectPrio(t){
+  if(/urgent|asap|critique|immediat|tout de suite|danger|bloque|bloquant|ferme|arret total|au plus vite|grave/.test(t)) return 1;
+  if(/quand j aurai|plus tard|a voir|penser a|un jour|pas presse|quand possible/.test(t)) return 3;
+  return 2;
+}
+function detectEcheance(t){
+  const now=new Date(); const iso=d=>d.toISOString().slice(0,10);
+  const add=n=>{ const d=new Date(now); d.setDate(d.getDate()+n); return iso(d); };
+  if(/aujourd hui|ce soir|dans la journee/.test(t)) return add(0);
+  if(/apres demain/.test(t)) return add(2);
+  if(/demain/.test(t)) return add(1);
+  if(/semaine prochaine/.test(t)) return add(7);
+  if(/cette semaine|avant vendredi|fin de semaine/.test(t)){
+    const d=new Date(now); const delta=(5-d.getDay()+7)%7; d.setDate(d.getDate()+delta); return iso(d);
+  }
+  const JJ=['dimanche','lundi','mardi','mercredi','jeudi','vendredi','samedi'];
+  for(let i=0;i<7;i++){
+    if(new RegExp('(^|[^a-z])'+JJ[i]).test(t)){
+      const d=new Date(now); const delta=((i-d.getDay()+7)%7)||7; d.setDate(d.getDate()+delta); return iso(d);
+    }
+  }
+  let m=t.match(/(\d{1,2})[\/\-](\d{1,2})(?:[\/\-](\d{2,4}))?/);
+  if(m){ const an=m[3]?(m[3].length==2?'20'+m[3]:m[3]):now.getFullYear();
+    return an+'-'+String(m[2]).padStart(2,'0')+'-'+String(m[1]).padStart(2,'0'); }
+  const MOIS={janvier:1,fevrier:2,mars:3,avril:4,mai:5,juin:6,juillet:7,aout:8,septembre:9,octobre:10,novembre:11,decembre:12};
+  m=t.match(/(\d{1,2}) (janvier|fevrier|mars|avril|mai|juin|juillet|aout|septembre|octobre|novembre|decembre)/);
+  if(m){ const mo=MOIS[m[2]]; let an=now.getFullYear();
+    if(new Date(an,mo-1,+m[1])<now) an++;
+    return an+'-'+String(mo).padStart(2,'0')+'-'+String(m[1]).padStart(2,'0'); }
+  return null;
+}
+function analyseLocale(texte){
+  const morceaux = texte.split(/\n+|\s*;\s*|\s+et aussi\s+|\s+puis ensuite\s+/i)
+                        .map(x=>x.trim()).filter(x=>x.length>3);
+  return (morceaux.length?morceaux:[texte]).map(bout=>{
+    const t = norm(bout);
+    const doute=[];
+    const prive = /(^| )(perso|personnel|pour moi|prive|note pour moi)( |$)/.test(t);
+    let assigne=null, alen=0;
+    S.users.forEach(u=>{ const n=norm(u.nom).split(' ')[0];
+      if(n.length>=3 && n.length>alen && new RegExp('(pour|avec|demander a|voir avec|delegue a) '+n).test(t)){ assigne=u.id; alen=n.length; } });
+    let resto = detectResto(t);
+    const membre = detectMembre(t);
+    if(!resto && membre) resto = membre.restaurant_id;
+    if(!resto){ resto = S.restos.length?S.restos[0].id:null; doute.push('restaurant'); }
+    const cat = detectCat(t);
+    if(cat==='organisation') doute.push('categorie');
+    let titre = bout.trim().replace(/^./,c=>c.toUpperCase());
+    let desc=null;
+    if(titre.length>90){ desc=titre; titre=titre.slice(0,87).trim()+'…'; }
+    return {titre,restaurant_id:resto,membre_id:membre?membre.id:null,categorie:cat,
+            priorite:detectPrio(t),statut:'À traiter',echeance:detectEcheance(t),
+            responsable:null,description:desc,actions:[],
+            assigne_id:assigne,prive:prive,incertain:doute};
+  });
+}
+async function analyser(texte){
+  const contexte={
+    date:new Date().toISOString().slice(0,10),
+    restaurants:S.restos.map(r=>({id:r.id,nom:r.nom,alias:r.alias||''})),
+    equipe:S.membres.map(m=>({id:m.id,nom:m.nom,poste:m.poste,restaurant_id:m.restaurant_id})),
+    utilisateurs:S.users.map(u=>({id:u.id,nom:u.nom,role:u.role})),
+    moi:S.moi?{id:S.moi.id,nom:S.moi.nom}:null,
+    categories:CATS.map(c=>({id:c.id,nom:c.nom}))
+  };
+  try{
+    const r=await fetch(API_PARSE,{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({message:texte,contexte})});
+    if(r.ok){
+      const j=await r.json();
+      if(j.sujets && j.sujets.length) return {source:'ia',sujets:j.sujets.map(nettoie)};
+    }
+  }catch(e){}
+  return {source:'local',sujets:analyseLocale(texte)};
+}
+function nettoie(s){
+  const ok = id => S.restos.some(r=>r.id==id);
+  const dt = d => (d && /^\d{4}-\d{2}-\d{2}$/.test(d)) ? d : null;
+  const doute = Array.isArray(s.incertain)?s.incertain.slice():[];
+  let resto = ok(s.restaurant_id)? s.restaurant_id : null;
+  const membre = S.membres.find(m=>m.id==s.membre_id)||null;
+  if(!resto && membre) resto = membre.restaurant_id;
+  if(!resto){ resto = S.restos.length?S.restos[0].id:null; if(!doute.includes('restaurant')) doute.push('restaurant'); }
+  return {
+    titre:(s.titre||'Sujet sans titre').slice(0,120),
+    restaurant_id:resto,
+    membre_id:membre?membre.id:null,
+    categorie:CAT[s.categorie]?s.categorie:'organisation',
+    priorite:[1,2,3].includes(+s.priorite)?+s.priorite:2,
+    statut:STATUTS.includes(s.statut)?s.statut:'À traiter',
+    echeance:dt(s.echeance),
+    responsable:s.responsable||null,
+    description:s.description||null,
+    actions:Array.isArray(s.actions)?s.actions.map(a=>typeof a==='string'?{texte:a,fait:false}:a):[],
+    assigne_id:S.users.some(u=>u.id==s.assigne_id)?s.assigne_id:null,
+    prive:s.prive===true,
+    incertain:doute
+  };
+}
+
+/* ============================================================
+   7. ÉCRAN CAPTURE
+   ============================================================ */
+function bienvenue(){
+  if(S.chat.length) return;
+  S.chat.push({role:'app',texte:"Dis-moi ce que tu as en tête, comme tu le dirais à voix haute.\nExemples : « demander l'accès aux caméras d'Amiens centre-ville » · « problème avec Florian, à traiter avant vendredi » · « friteuse 2 HS à Berck, urgent ».\nJe range, tu valides."});
+}
+function renderChat(){
+  const el=$('chat-flux');
+  el.innerHTML = S.chat.map((m,i)=>{
+    if(m.role==='moi')  return `<div class="bulle moi">${esc(m.texte)}</div>`;
+    if(m.role==='app')  return `<div class="bulle app ${m.fait?'fait':''}">${m.html||esc(m.texte)}</div>`;
+    if(m.role==='carte')return carteHTML(m,i);
+    return '';
+  }).join('');
+  el.scrollTop = el.scrollHeight;
+}
+function carteHTML(m,i){
+  const s=m.s;
+  const membre = S.membres.find(x=>x.id==s.membre_id);
+  const d = c => s.incertain && s.incertain.includes(c) ? 'doute' : '';
+  return `<div class="carte">
+    <input class="ct" value="${esc(s.titre)}" onchange="majCarte(${i},'titre',this.value)">
+    ${membre?`<div class="who">${esc(membre.nom)} · ${esc(membre.poste||'')} · ${esc(nomResto(membre.restaurant_id))}</div>`:''}
+    <div class="grid">
+      <select class="${d('restaurant')}" onchange="majCarte(${i},'restaurant_id',this.value)">
+        ${S.restos.map(r=>`<option value="${r.id}" ${r.id==s.restaurant_id?'selected':''}>${esc(r.nom)}</option>`).join('')}
+      </select>
+      <select class="${d('categorie')}" onchange="majCarte(${i},'categorie',this.value)">
+        ${CATS.map(c=>`<option value="${c.id}" ${c.id===s.categorie?'selected':''}>${c.nom}</option>`).join('')}
+      </select>
+      <select onchange="majCarte(${i},'priorite',this.value)">
+        ${PRIOS.map(p=>`<option value="${p.v}" ${p.v==s.priorite?'selected':''}>${p.l}</option>`).join('')}
+      </select>
+      <input type="date" class="${d('echeance')}" value="${s.echeance||''}" onchange="majCarte(${i},'echeance',this.value)">
+      <select onchange="majCarte(${i},'assigne_id',this.value)">
+        <option value="">Personne assignée</option>
+        ${S.users.map(u=>`<option value="${u.id}" ${u.id==s.assigne_id?'selected':''}>Pour ${esc(u.nom)}</option>`).join('')}
+      </select>
+      <select onchange="majCarte(${i},'prive',this.value)">
+        <option value="0" ${s.prive?'':'selected'}>Toute l'équipe</option>
+        <option value="1" ${s.prive?'selected':''}>Personnel</option>
+      </select>
+    </div>
+    <div class="acts2">
+      <button class="no2" onclick="jeter(${i})">Annuler</button>
+      <button class="ok2" onclick="ranger(${i})">Ranger</button>
+    </div>
+  </div>`;
+}
+function majCarte(i,champ,val){
+  const m=S.chat[i]; if(!m) return;
+  if(champ==='priorite'||champ==='restaurant_id') val=+val;
+  if(champ==='assigne_id') val=val?+val:null;
+  if(champ==='prive') val=(val==='1'||val===true);
+  if(champ==='echeance') val=val||null;
+  m.s[champ]=val;
+  if(m.s.incertain) m.s.incertain=m.s.incertain.filter(c=>!(champ.startsWith(c)||c.startsWith(champ.replace('_id',''))));
+  renderChat();
+}
+function jeter(i){ S.chat.splice(i,1); renderChat(); }
+async function ranger(i){
+  const m=S.chat[i]; if(!m) return;
+  const s={...m.s}; delete s.incertain;
+  s.updated_at=new Date().toISOString();
+  s.auteur_id = S.moi? S.moi.id : null;
+  try{
+    const n=await dbInsert('orga_items',s);
+    S.items.push(n);
+    const rang=rangDansFile(n.id);
+    const dest = n.prive ? 'Rangé dans <b>tes tâches personnelles</b>'
+      : `Rangé dans <b>${esc(nomResto(n.restaurant_id))}</b> · ${CAT[n.categorie].nom}`;
+    const pour = nomUser(n.assigne_id);
+    S.chat[i]={role:'app',fait:true,
+      html: dest + (pour?` · assigné à <b>${esc(pour)}</b>`:'') +
+        (n.prive?'' : `<br>Position <b>${rang}</b> sur ${ouverts().length} dans la file commune.`)};
+    renderChat(); render();
+  }catch(e){ toast('Erreur : '+e.message); }
+}
+async function envoyer(){
+  const t=$('msg').value.trim(); if(!t) return;
+  if(!S.restos.length){ toast('Ajoute d\'abord un restaurant'); return go('restos'); }
+  $('msg').value=''; $('msg').style.height='46px';
+  S.chat.push({role:'moi',texte:t});
+  S.chat.push({role:'app',texte:'…'});
+  renderChat();
+  const res=await analyser(t);
+  S.chat.pop();
+  if(!res.sujets.length){ S.chat.push({role:'app',texte:"Je n'ai pas réussi à en tirer un sujet. Reformule en une phrase."}); }
+  else{
+    S.chat.push({role:'app',texte: res.sujets.length>1
+      ? `J'y vois ${res.sujets.length} sujets distincts.`
+      : (res.source==='local' ? 'Voilà ce que j\'en comprends — vérifie les champs orangés.' : 'Voilà ce que j\'en comprends.')});
+    res.sujets.forEach(s=>S.chat.push({role:'carte',s}));
+  }
+  renderChat();
+}
+$('msg').addEventListener('input',e=>{ e.target.style.height='46px'; e.target.style.height=Math.min(e.target.scrollHeight,150)+'px'; });
+$('msg').addEventListener('keydown',e=>{ if(e.key==='Enter'&&(e.metaKey||e.ctrlKey)) envoyer(); });
+
+/* Dictée vocale (Chrome / Android ; sur iPhone utilise le micro du clavier) */
+let reco=null;
+function dicter(){
+  const R = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if(!R){ toast('Utilise le micro de ton clavier'); $('msg').focus(); return; }
+  if(reco){ reco.stop(); reco=null; $('btn-mic').classList.remove('rec'); return; }
+  reco=new R(); reco.lang='fr-FR'; reco.continuous=true; reco.interimResults=true;
+  let base=$('msg').value;
+  reco.onresult=e=>{ let s=''; for(let i=0;i<e.results.length;i++) s+=e.results[i][0].transcript;
+    $('msg').value=(base?base+' ':'')+s; };
+  reco.onend=()=>{ reco=null; $('btn-mic').classList.remove('rec'); };
+  reco.onerror=()=>{ reco=null; $('btn-mic').classList.remove('rec'); };
+  reco.start(); $('btn-mic').classList.add('rec');
+}
+
+/* ============================================================
+   8. RENDU GÉNÉRAL
+   ============================================================ */
+function ligneItem(it,rang){
+  const r = raisons(it).map(([c,t])=>`<span class="chip ${c}">${t}</span>`).join('');
+  const assigne = nomUser(it.assigne_id);
+  const auteur  = (S.moi && it.auteur_id && it.auteur_id!=S.moi.id) ? nomUser(it.auteur_id) : null;
+  return `<button class="item ${it.statut==='Fait'?'done':''}" onclick="openItem(${it.id})">
+    <span class="rail" style="background:${couleur(it)}"></span>
+    ${rang?`<span class="rank">${rang}</span>`:''}
+    <span class="body">
+      <span class="t">${esc(it.titre)}</span>
+      <span class="meta">
+        <span class="chip">${esc(nomResto(it.restaurant_id))}</span>
+        <span class="chip">${CAT[it.categorie]?CAT[it.categorie].nom:'—'}</span>
+        ${r}
+        ${assigne?`<span class="chip">→ ${esc(assigne)}</span>`:''}
+        ${it.responsable?`<span class="chip">→ ${esc(it.responsable)}</span>`:''}
+        ${auteur?`<span class="chip">noté par ${esc(auteur)}</span>`:''}
+        ${it.prive?`<span class="chip">personnel</span>`:''}
+      </span>
+    </span></button>`;
+}
+function renderPilotage(){
+  const ouv = ouverts();
+  $('k-ouv').textContent  = ouv.length;
+  $('k-ret').textContent  = ouv.filter(i=>{const j=jours(i.echeance);return j!==null&&j<0;}).length;
+  $('k-p1').textContent   = ouv.filter(i=>i.priorite==1).length;
+  $('k-fait').textContent = visibles().filter(i=>i.statut==='Fait'&&i.date_cloture&&
+                              (Date.now()-new Date(i.date_cloture))<30*86400000).length;
+  const top = trie(ouv).slice(0,6);
+  $('top-list').innerHTML = top.length
+    ? top.map((it,i)=>ligneItem(it,i+1)).join('')
+    : `<div class="empty"><b>Rien en attente</b>Note un sujet depuis l'écran Capture</div>`;
+  $('pil-restos').innerHTML = S.restos.map(r=>{
+    const l=ouv.filter(i=>i.restaurant_id==r.id);
+    const urg=l.filter(i=>i.priorite==1||(jours(i.echeance)!==null&&jours(i.echeance)<0)).length;
+    return `<button class="resto" onclick="openResto2(${r.id})">
+      <span><span class="nm">${esc(r.nom)}</span><br><span class="zn">${esc(r.zone||'')}</span></span>
+      <span class="cnt">${urg?`<span class="bubble a">${urg}</span>`:''}
+      <span class="bubble n">${l.length}</span></span></button>`;
+  }).join('') || `<div class="empty"><b>Aucun restaurant</b>Ajoute-les dans l'onglet Restaurants</div>`;
+  $('pil-cats').innerHTML = CATS.map(c=>{
+    const n=ouv.filter(i=>i.categorie===c.id).length;
+    return `<button class="cat ${n?'':'zero'}" onclick="ordreParCat('${c.id}')">
+      <span class="g" style="color:${n?'var(--navy)':'var(--ink-3)'}">${c.g}</span>
+      <span class="n">${c.nom}</span><span class="c">${n}</span></button>`;
+  }).join('');
+}
+function renderRestos(){
+  const ouv=ouverts();
+  $('resto-list').innerHTML = S.restos.map(r=>{
+    const l=ouv.filter(i=>i.restaurant_id==r.id);
+    const eq=S.membres.filter(m=>m.restaurant_id==r.id).length;
+    return `<button class="resto" onclick="openResto2(${r.id})">
+      <span><span class="nm">${esc(r.nom)}</span><br>
+      <span class="zn">${eq} au fichier · ${l.length} sujet${l.length>1?'s':''} ouvert${l.length>1?'s':''}</span></span>
+      <span class="cnt"><span class="bubble n">›</span></span></button>`;
+  }).join('') || `<div class="empty"><b>Aucun restaurant</b>Commence par en ajouter un</div>`;
+}
+function renderResto(){
+  const r=S.restos.find(x=>x.id==S.resto); if(!r) return go('restos');
+  $('title').textContent=r.nom;
+  const ouv=ouverts().filter(i=>i.restaurant_id==r.id);
+  $('subtitle').innerHTML=`${ouv.length} ouvert${ouv.length>1?'s':''}<br>${esc(r.zone||'')}`;
+  const tabs=[['apercu','Aperçu'],['equipe','Équipe'],...CATS.map(c=>[c.id,c.nom.split(' /')[0]]),['fait','Traités']];
+  $('resto-tabs').innerHTML = tabs.map(([id,l])=>{
+    let n='';
+    if(id!=='apercu'&&id!=='equipe'&&id!=='fait') n=' '+ouv.filter(i=>i.categorie===id).length;
+    if(id==='equipe') n=' '+S.membres.filter(m=>m.restaurant_id==r.id).length;
+    return `<button class="tab ${S.tab===id?'on':''}" onclick="setTab('${id}')">${l}${n}</button>`;
+  }).join('');
+  const b=$('resto-body');
+  if(S.tab==='apercu'){
+    const t=trie(ouv);
+    b.innerHTML = `<div class="section-h"><h2>Ordre de traitement</h2><span>${t.length} sujet${t.length>1?'s':''}</span></div>`
+      + (t.length? t.map((it,i)=>ligneItem(it,i+1)).join('')
+        : `<div class="empty"><b>Tout est à jour ici</b>Aucun sujet ouvert sur ce restaurant</div>`)
+      + `<div class="section-h"><h2>Répartition</h2></div><div class="cats">`
+      + CATS.map(c=>{const n=ouv.filter(i=>i.categorie===c.id).length;
+          return `<button class="cat ${n?'':'zero'}" onclick="setTab('${c.id}')">
+            <span class="g" style="color:${n?'var(--navy)':'var(--ink-3)'}">${c.g}</span>
+            <span class="n">${c.nom}</span><span class="c">${n}</span></button>`;}).join('')
+      + `</div><button class="btn sec" onclick="openResto(${r.id})">Modifier ce restaurant</button>`;
+  }
+  else if(S.tab==='equipe'){
+    const eq=S.membres.filter(m=>m.restaurant_id==r.id);
+    const grp={}; eq.forEach(m=>{ const p=m.poste||'Autre'; (grp[p]=grp[p]||[]).push(m); });
+    b.innerHTML = POSTES.filter(p=>grp[p]).map(p=>`<div class="section-h"><h2>${p}</h2><span>${grp[p].length}</span></div>`
+      + grp[p].map(m=>{
+        const n=ouv.filter(i=>i.membre_id==m.id).length;
+        const ini=(m.nom||'?').split(' ').map(x=>x[0]).slice(0,2).join('').toUpperCase();
+        return `<button class="membre" onclick="openMembre(${m.id})">
+          <span class="ini">${ini}</span>
+          <span><span class="nm">${esc(m.nom)}</span><br>
+          <span class="po">${esc(m.contrat||'')}${m.statut&&m.statut!=='Actif'?' · '+esc(m.statut):''}${m.notes?' · suivi':''}</span></span>
+          ${n?`<span class="cnt"><span class="bubble a">${n}</span></span>`:''}</button>`;
+      }).join('')).join('')
+      || `<div class="empty"><b>Équipe à constituer</b>Ajoute les personnes clés : c'est ce qui permet de te comprendre quand tu dictes un prénom</div>`;
+    b.innerHTML += `<button class="btn sec" onclick="openMembre()">Ajouter un collaborateur</button>`;
+  }
+  else if(S.tab==='fait'){
+    const f=visibles().filter(i=>i.restaurant_id==r.id&&i.statut==='Fait')
+      .sort((a,b)=>new Date(b.date_cloture||0)-new Date(a.date_cloture||0));
+    b.innerHTML = (f.length? f.map(it=>ligneItem(it)).join('')
+      : `<div class="empty"><b>Rien d'archivé</b>Les sujets traités apparaîtront ici</div>`)
+      + (f.length? boutonPurge(r.id,r.id) : '');
+  }
+  else{
+    const l=trie(ouv.filter(i=>i.categorie===S.tab));
+    b.innerHTML = (l.length? l.map((it,i)=>ligneItem(it,i+1)).join('')
+      : `<div class="empty"><b>Aucun sujet</b>${CAT[S.tab].nom} : rien à traiter ici</div>`)
+      + `<button class="btn sec" onclick="openItem(null,${r.id},'${S.tab}')">Ajouter dans ${CAT[S.tab].nom}</button>`;
+  }
+}
+function renderOrdre(){
+  const q=norm($('q').value||'');
+  let l = S.filtreStatut==='fait'? visibles().filter(i=>i.statut==='Fait') : ouverts();
+  if(S.filtreCat!=='tout') l=l.filter(i=>i.categorie===S.filtreCat);
+  if(q) l=l.filter(i=>norm((i.titre||'')+' '+(i.description||'')+' '+(i.responsable||'')+' '+nomResto(i.restaurant_id)).includes(q));
+  l=trie(l);
+  $('ordre-filtres').innerHTML =
+    `<button class="tab ${S.filtreStatut==='ouvert'?'on':''}" onclick="setF('statut','ouvert')">Ouverts</button>
+     <button class="tab ${S.filtreStatut==='fait'?'on':''}" onclick="setF('statut','fait')">Traités</button>
+     <button class="tab ${S.filtreCat==='tout'?'on':''}" onclick="setF('cat','tout')">Tous sujets</button>`
+    + CATS.map(c=>`<button class="tab ${S.filtreCat===c.id?'on':''}" onclick="setF('cat','${c.id}')">${c.nom.split(' /')[0]}</button>`).join('');
+  $('ordre-list').innerHTML = (l.length
+    ? l.map((it,i)=>ligneItem(it,S.filtreStatut==='fait'?0:i+1)).join('')
+    : `<div class="empty"><b>Aucun résultat</b>Change de filtre ou note un nouveau sujet</div>`)
+    + (S.filtreStatut==='fait' ? boutonPurge(null,null) : '');
+  $('subtitle').innerHTML = l.length+' sujet'+(l.length>1?'s':'');
+}
+/* Purge : sujets traités il y a plus de 6 mois.
+   portee = id de restaurant, 'perso', ou null pour toute la file commune. */
+const SIX_MOIS = 182*86400000;
+function dateFin(i){ return new Date(i.date_cloture||i.updated_at||i.created_at||0); }
+function vieuxTraites(portee){
+  const lim = Date.now()-SIX_MOIS;
+  const base = portee==='perso' ? mesPerso() : visibles();
+  return base.filter(i=>i.statut==='Fait' && dateFin(i)<lim
+    && (portee===null||portee==='perso' ? true : i.restaurant_id==portee));
+}
+function boutonPurge(portee,cle){
+  const n=vieuxTraites(portee).length;
+  return `<button class="btn del" onclick="purger(${cle})" ${n?'':'style="opacity:.45"'}>
+    Vider les traités de plus de 6 mois${n?' ('+n+')':''}</button>`;
+}
+async function purger(portee){
+  const l=vieuxTraites(portee===undefined?null:portee);
+  if(!l.length) return toast('Rien de plus de 6 mois');
+  if(!confirm('Supprimer définitivement '+l.length+' sujet'+(l.length>1?'s':'')+
+              ' traité'+(l.length>1?'s':'')+' il y a plus de 6 mois ?\n\nCette action est irréversible.')) return;
+  let ko=0;
+  for(const it of l){
+    try{ await dbDelete('orga_items',it.id); S.items=S.items.filter(x=>x.id!=it.id); }
+    catch(e){ ko++; }
+  }
+  render();
+  toast(ko? (l.length-ko)+' supprimés, '+ko+' en échec' : l.length+' sujet'+(l.length>1?'s':'')+' supprimé'+(l.length>1?'s':''));
+}
+function renderMoi(){
+  const T=[['perso','Personnel',mesPerso().filter(i=>i.statut!=='Fait').length],
+           ['assignes',"Pour moi",mesAssignes().length],
+           ['crees',"J'ai lancé",mesCrees().length]];
+  $('moi-tabs').innerHTML=T.map(([id,l,n])=>
+    `<button class="tab ${S.tabMoi===id?'on':''}" onclick="setTabMoi('${id}')">${l} ${n}</button>`).join('');
+  const b=$('moi-body');
+  if(S.tabMoi==='perso'){
+    const l=trie(mesPerso().filter(i=>i.statut!=='Fait'));
+    const f=mesPerso().filter(i=>i.statut==='Fait');
+    b.innerHTML=(l.length? l.map((it,i)=>ligneItem(it,i+1)).join('')
+      : `<div class="empty"><b>Rien de personnel</b>Ces sujets-là ne sont visibles que par toi dans l'app</div>`)
+      + `<button class="btn sec" onclick="openItem(null,null,null,{prive:true})">Ajouter une tâche personnelle</button>`
+      + (f.length? `<div class="section-h"><h2>Traités</h2><span>${f.length}</span></div>`
+          +f.slice(0,15).map(it=>ligneItem(it)).join('')+boutonPurge('perso',"'perso'") : '');
+  }
+  else if(S.tabMoi==='assignes'){
+    const l=trie(mesAssignes());
+    b.innerHTML=l.length? l.map((it,i)=>ligneItem(it,i+1)).join('')
+      : `<div class="empty"><b>Rien ne t'attend</b>Les sujets qu'on t'assigne arrivent ici</div>`;
+  }
+  else{
+    const l=trie(mesCrees());
+    b.innerHTML=l.length? l.map((it,i)=>ligneItem(it,i+1)).join('')
+      : `<div class="empty"><b>Rien en cours</b>Les sujets que tu as notés pour les autres arrivent ici</div>`;
+  }
+}
+function setTabMoi(t){ S.tabMoi=t; renderMoi(); window.scrollTo(0,0); }
+function setF(k,v){ if(k==='cat') S.filtreCat=v; else S.filtreStatut=v; renderOrdre(); }
+function ordreParCat(c){ S.filtreCat=c; S.filtreStatut='ouvert'; go('ordre'); }
+function setTab(t){ S.tab=t; renderResto(); window.scrollTo(0,0); }
+
+function render(){
+  if(S.view==='capture'){ $('title').textContent='Capture';
+    const o=ouverts().length; $('subtitle').innerHTML=o+' sujet'+(o>1?'s':'')+' ouvert'+(o>1?'s':'');
+    bienvenue(); renderChat(); }
+  if(S.view==='pilotage'){ $('title').textContent='Pilotage';
+    const o=ouverts().length; $('subtitle').innerHTML=`${S.restos.length} restaurants<br>${o} sujet${o>1?'s':''} ouvert${o>1?'s':''}`;
+    renderPilotage(); }
+  if(S.view==='restos'){ $('title').textContent='Restaurants'; $('subtitle').innerHTML=''; renderRestos(); }
+  if(S.view==='resto')  renderResto();
+  if(S.view==='ordre'){ $('title').textContent='Ordre de traitement'; renderOrdre(); }
+  if(S.view==='moi'){ $('title').textContent=S.moi?S.moi.nom:'Moi';
+    $('subtitle').innerHTML=(S.moi&&S.moi.role?esc(S.moi.role):'')+'<br>'+mesPerso().filter(i=>i.statut!=='Fait').length+' perso · '+mesAssignes().length+' pour moi';
+    renderMoi(); }
+}
+function go(v){
+  S.view=v;
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('on'));
+  $('s-'+v).classList.add('on');
+  document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('on',b.dataset.v===v));
+  $('fab').classList.toggle('hide',v==='capture');
+  render(); window.scrollTo(0,0);
+}
+function openResto2(id){ S.resto=id; S.tab='apercu'; go('resto'); }
+
+/* ============================================================
+   9. MODALE SUJET
+   ============================================================ */
+function openSheet(id){ $(id).classList.add('on'); }
+function closeSheet(id){ $(id).classList.remove('on'); }
+document.querySelectorAll('.sheet').forEach(s=>s.addEventListener('click',e=>{ if(e.target===s) s.classList.remove('on'); }));
+
+function optionsResto(sel,v){ sel.innerHTML=S.restos.map(r=>`<option value="${r.id}" ${r.id==v?'selected':''}>${esc(r.nom)}</option>`).join(''); }
+function optionsMembre(resId,v){
+  const l=S.membres.filter(m=>m.restaurant_id==resId);
+  $('f-membre').innerHTML='<option value="">—</option>'+l.map(m=>`<option value="${m.id}" ${m.id==v?'selected':''}>${esc(m.nom)}</option>`).join('');
+}
+function seg(cont,items,val,cb){
+  $(cont).innerHTML=items.map(i=>`<button data-v="${i.v}" class="${i.v==val?'on':''}">${i.l}</button>`).join('');
+  $(cont).querySelectorAll('button').forEach(b=>b.onclick=()=>{
+    $(cont).querySelectorAll('button').forEach(x=>x.classList.remove('on'));
+    b.classList.add('on'); if(cb) cb(b.dataset.v);
+  });
+}
+function segVal(cont){ const b=$(cont).querySelector('button.on'); return b?b.dataset.v:null; }
+
+function optionsUser(sel,v){
+  $(sel).innerHTML='<option value="">—</option>'+S.users.map(u=>
+    `<option value="${u.id}" ${u.id==v?'selected':''}>${esc(u.nom)}</option>`).join('');
+}
+function openItem(id,restoDefaut,catDefaut,opts){
+  opts=opts||{};
+  if(!S.restos.length){ toast('Ajoute d\'abord un restaurant'); return go('restos'); }
+  const it = id? S.items.find(x=>x.id==id) : null;
+  S.editItem = it? it.id : null;
+  S.actions  = it && Array.isArray(it.actions)? JSON.parse(JSON.stringify(it.actions)) : [];
+  $('item-h').textContent = it? 'Sujet' : 'Nouveau sujet';
+  $('f-titre').value    = it? it.titre||'' : '';
+  $('f-desc').value     = it? it.description||'' : '';
+  $('f-resp').value     = it? it.responsable||'' : '';
+  $('f-echeance').value = it? it.echeance||'' : '';
+  optionsResto($('f-resto'), it? it.restaurant_id : (restoDefaut||S.resto||S.restos[0].id));
+  $('f-cat').innerHTML = CATS.map(c=>`<option value="${c.id}">${c.nom}</option>`).join('');
+  $('f-cat').value = it? it.categorie : (catDefaut||'probleme');
+  seg('f-prio',   PRIOS.map(p=>({v:p.v,l:p.l})), it? it.priorite:2);
+  seg('f-statut', STATUTS.map(s=>({v:s,l:s})),   it? it.statut:'À traiter');
+  optionsUser('f-assigne', it? it.assigne_id : null);
+  $('f-prive').value = it? (it.prive?'1':'0') : (opts.prive?'1':'0');
+  optionsMembre($('f-resto').value, it? it.membre_id : null);
+  $('f-resto').onchange = ()=>optionsMembre($('f-resto').value,null);
+  $('b-suppr').style.display = it?'block':'none';
+  $('b-clore').style.display = (it && it.statut!=='Fait')?'block':'none';
+  renderActions(); $('f-newact').value='';
+  openSheet('sh-item');
+}
+function renderActions(){
+  $('f-actions').innerHTML = S.actions.length? S.actions.map((a,i)=>
+    `<div class="act ${a.fait?'done':''}">
+       <input type="checkbox" ${a.fait?'checked':''} onchange="S.actions[${i}].fait=this.checked;renderActions()">
+       <span>${esc(a.texte)}</span><button onclick="S.actions.splice(${i},1);renderActions()">✕</button>
+     </div>`).join('') : '<div class="muted">Découpe le sujet en étapes concrètes.</div>';
+}
+function addAction(){
+  const v=$('f-newact').value.trim(); if(!v) return;
+  S.actions.push({texte:v,fait:false}); $('f-newact').value=''; renderActions();
+}
+async function saveItem(){
+  const titre=$('f-titre').value.trim();
+  if(!titre) return toast('Il manque le sujet');
+  const row={
+    restaurant_id:+$('f-resto').value,
+    membre_id:$('f-membre').value? +$('f-membre').value : null,
+    categorie:$('f-cat').value, titre,
+    description:$('f-desc').value.trim()||null,
+    priorite:+segVal('f-prio'), statut:segVal('f-statut'),
+    responsable:$('f-resp').value.trim()||null,
+    echeance:$('f-echeance').value||null,
+    assigne_id:$('f-assigne').value? +$('f-assigne').value : null,
+    prive:$('f-prive').value==='1',
+    actions:S.actions, updated_at:new Date().toISOString()
+  };
+  if(!S.editItem) row.auteur_id = S.moi? S.moi.id : null;
+  if(row.statut==='Fait') row.date_cloture=new Date().toISOString();
+  try{
+    if(S.editItem){ const u=await dbUpdate('orga_items',S.editItem,row);
+      S.items=S.items.map(i=>i.id==S.editItem?u:i); }
+    else { const n=await dbInsert('orga_items',row); S.items.push(n); }
+    closeSheet('sh-item'); render(); toast('Enregistré');
+  }catch(e){ toast('Erreur : '+e.message); }
+}
+async function cloreItem(){
+  if(!S.editItem) return;
+  const u=await dbUpdate('orga_items',S.editItem,{statut:'Fait',date_cloture:new Date().toISOString()});
+  S.items=S.items.map(i=>i.id==S.editItem?u:i);
+  closeSheet('sh-item'); render(); toast('Sujet traité');
+}
+async function delItem(){
+  if(!S.editItem||!confirm('Supprimer ce sujet ?')) return;
+  await dbDelete('orga_items',S.editItem);
+  S.items=S.items.filter(i=>i.id!=S.editItem);
+  closeSheet('sh-item'); render(); toast('Supprimé');
+}
+
+/* ============================================================
+   10. MODALE ÉQUIPE
+   ============================================================ */
+function openMembre(id){
+  const m=id? S.membres.find(x=>x.id==id):null;
+  S.editMembre=m?m.id:null;
+  $('membre-h').textContent=m?'Collaborateur':'Nouveau collaborateur';
+  $('m-nom').value=m?m.nom||'':''; $('m-notes').value=m?m.notes||'':'';
+  $('m-entree').value=m?m.date_entree||'':'';
+  $('m-poste').innerHTML   = POSTES.map(p=>`<option ${m&&m.poste===p?'selected':''}>${p}</option>`).join('');
+  $('m-contrat').innerHTML = CONTRATS.map(c=>`<option ${m&&m.contrat===c?'selected':''}>${c}</option>`).join('');
+  $('m-statut').innerHTML  = ST_MEMBRE.map(s=>`<option ${m&&m.statut===s?'selected':''}>${s}</option>`).join('');
+  $('mb-suppr').style.display=m?'block':'none';
+  openSheet('sh-membre');
+}
+async function saveMembre(){
+  const nom=$('m-nom').value.trim(); if(!nom) return toast('Il manque le nom');
+  const row={restaurant_id:S.resto,nom,poste:$('m-poste').value,contrat:$('m-contrat').value,
+             statut:$('m-statut').value,date_entree:$('m-entree').value||null,
+             notes:$('m-notes').value.trim()||null};
+  try{
+    if(S.editMembre){ const u=await dbUpdate('orga_membres',S.editMembre,row);
+      S.membres=S.membres.map(x=>x.id==S.editMembre?u:x); }
+    else { const n=await dbInsert('orga_membres',row); S.membres.push(n); }
+    closeSheet('sh-membre'); render(); toast('Enregistré');
+  }catch(e){ toast('Erreur : '+e.message); }
+}
+async function delMembre(){
+  if(!S.editMembre||!confirm('Retirer cette personne du fichier ?')) return;
+  await dbDelete('orga_membres',S.editMembre);
+  S.membres=S.membres.filter(x=>x.id!=S.editMembre);
+  closeSheet('sh-membre'); render(); toast('Supprimé');
+}
+
+/* ============================================================
+   11. MODALE RESTAURANT
+   ============================================================ */
+function openResto(id){
+  const r=id? S.restos.find(x=>x.id==id):null;
+  S.editResto=r?r.id:null;
+  $('resto-h').textContent=r?'Restaurant':'Nouveau restaurant';
+  $('r-nom').value=r?r.nom||'':''; $('r-zone').value=r?r.zone||'':'';
+  $('r-alias').value=r?r.alias||'':'';
+  $('rb-suppr').style.display=r?'block':'none';
+  openSheet('sh-resto');
+}
+async function saveResto(){
+  const nom=$('r-nom').value.trim(); if(!nom) return toast('Il manque le nom');
+  const row={nom,zone:$('r-zone').value.trim()||null,alias:$('r-alias').value.trim()||null};
+  try{
+    if(S.editResto){ const u=await dbUpdate('orga_restaurants',S.editResto,row);
+      S.restos=S.restos.map(x=>x.id==S.editResto?u:x); }
+    else { const n=await dbInsert('orga_restaurants',{...row,ordre:S.restos.length+1,actif:true}); S.restos.push(n); }
+    closeSheet('sh-resto'); render(); toast('Enregistré');
+  }catch(e){ toast('Erreur : '+e.message); }
+}
+async function delResto(){
+  if(!S.editResto||!confirm('Supprimer ce restaurant et tous ses sujets ?')) return;
+  await dbDelete('orga_restaurants',S.editResto);
+  S.restos=S.restos.filter(x=>x.id!=S.editResto);
+  S.items=S.items.filter(i=>i.restaurant_id!=S.editResto);
+  S.membres=S.membres.filter(m=>m.restaurant_id!=S.editResto);
+  closeSheet('sh-resto'); go('restos'); toast('Supprimé');
+}
+
+/* ============================================================
+   12. EXPORT / TOAST
+   ============================================================ */
+function exportCSV(){
+  const h=['Restaurant','Categorie','Sujet','Priorite','Statut','Responsable','Echeance','Score','Detail'];
+  const l=trie(S.filtreStatut==='fait'?visibles().filter(i=>i.statut==='Fait'):ouverts());
+  const csv=[h.join(';')].concat(l.map(i=>[
+    nomResto(i.restaurant_id), CAT[i.categorie]?CAT[i.categorie].nom:'', i.titre,
+    (PRIOS.find(p=>p.v==i.priorite)||{}).l||'', i.statut, i.responsable||'',
+    i.echeance||'', score(i), (i.description||'').replace(/[\r\n;]/g,' ')
+  ].map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(';'))).join('\n');
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'}));
+  a.download='bkco-orga-'+new Date().toISOString().slice(0,10)+'.csv'; a.click();
+}
+let tT;
+function toast(m){ const t=$('toast'); t.textContent=m; t.classList.add('on');
+  clearTimeout(tT); tT=setTimeout(()=>t.classList.remove('on'),2200); }
+
+/* ============================================================
+   13. AUTHENTIFICATION + DÉMARRAGE
+   ============================================================ */
+function sess(k,v){ try{ if(v===undefined) return sessionStorage.getItem(k); sessionStorage.setItem(k,v); }catch(e){ return null; } }
+$('pin').addEventListener('input',async e=>{
+  const v=e.target.value;
+  if(v.length<4) return;
+  let u=null;
+  if(SB){
+    try{ const {data}=await SB.from('orga_utilisateurs').select('*').eq('pin',v).eq('actif',true);
+         if(data&&data.length) u=data[0]; }catch(err){}
+  }else{
+    u=mem.orga_utilisateurs.find(x=>x.pin===v)||null;
+  }
+  if(!u && v===PIN_SECOURS) u={id:1,nom:'Moi',role:'admin'};
+  if(u){ S.moi={id:u.id,nom:u.nom,role:u.role}; sess('bkco_orga_moi',JSON.stringify(S.moi)); demarrer(); }
+  else { $('pinErr').textContent='Code incorrect'; e.target.value=''; }
+});
+function logout(){ try{ sessionStorage.removeItem('bkco_orga_moi'); }catch(e){} location.reload(); }
+
+async function charger(){
+  const [r,m,i,u]=await Promise.all([dbList('orga_restaurants'),dbList('orga_membres'),
+                                     dbList('orga_items'),dbList('orga_utilisateurs')]);
+  S.restos=r.sort((a,b)=>(a.ordre||99)-(b.ordre||99));
+  S.membres=m; S.items=i;
+  S.users=(u||[]).filter(x=>x.actif!==false).map(x=>({id:x.id,nom:x.nom,role:x.role}));
+  if(S.moi && !S.users.some(x=>x.id==S.moi.id)) S.users.unshift(S.moi);
+}
+async function demarrer(){
+  $('login').style.display='none';
+  try{ if(!SB) lsGet(); await charger(); }
+  catch(e){ toast('Chargement impossible : '+e.message); }
+  go('pilotage');
+}
+/* Synchronisation : les trois comptes voient les ajouts des autres. */
+async function rafraichir(){
+  if(!S.moi || !SB || document.querySelector('.sheet.on')) return;
+  try{ await charger(); render(); }catch(e){}
+}
+setInterval(rafraichir,90000);
+document.addEventListener('visibilitychange',()=>{ if(!document.hidden) rafraichir(); });
+$('mode').textContent = CONFIGURE? '' : "Mode local : renseigne Supabase en haut du fichier pour synchroniser tes appareils.";
+(function(){ const s=sess('bkco_orga_moi');
+  if(s){ try{ S.moi=JSON.parse(s); demarrer(); }catch(e){} } })();
+
+/* PWA */
+(function(){
+  const mf={name:'BKCO Orga',short_name:'Orga',start_url:'.',display:'standalone',
+    background_color:'#F4F5F7',theme_color:'#B62123',
+    icons:[{src:'data:image/svg+xml;base64,'+btoa('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192"><rect width="192" height="192" rx="42" fill="#B62123"/><text x="96" y="128" font-family="-apple-system,sans-serif" font-size="92" font-weight="700" fill="#FFFFFF" text-anchor="middle">O</text></svg>'),
+      sizes:'192x192',type:'image/svg+xml',purpose:'any'}]};
+  const l=document.createElement('link'); l.rel='manifest';
+  l.href=URL.createObjectURL(new Blob([JSON.stringify(mf)],{type:'application/json'}));
+  document.head.appendChild(l);
+})();
+</script>
+</body>
+</html>
