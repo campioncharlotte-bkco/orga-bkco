@@ -1028,6 +1028,9 @@ function renderPilotage(){
       <span class="bubble n">${l.length}</span></span></button>`;
   }).join('') || `<div class="empty">Aucun sujet rattaché à un restaurant</div>`;
 
+  html += `<button class="btn sec" onclick="openItem()">Ajouter un sujet</button>`;
+  if(S.pilot==='restos')
+    html += `<div class="muted" style="margin-top:8px">Assigne-le à un directeur pour qu'il apparaisse dans cet onglet.</div>`;
   $('pilotage-corps').innerHTML = html;
 }
 function renderRestos(){
