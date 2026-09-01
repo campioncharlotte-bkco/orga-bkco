@@ -229,8 +229,11 @@ textarea{min-height:84px;resize:vertical;font-size:15px;line-height:1.5}
 #login .mark{font-size:38px;font-weight:800;line-height:1;letter-spacing:-.02em}
 #login .mark em{font-style:normal;color:rgba(255,255,255,.72);font-weight:600}
 #login p{color:rgba(255,255,255,.8);font-size:13.5px;margin:10px 0 26px}
-#login input{max-width:210px;text-align:center;font-size:24px;letter-spacing:.35em;padding:13px;
+#login input{max-width:260px;text-align:center;font-size:16px;padding:13px;margin-bottom:9px;
   background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.32);color:#fff}
+#login input#pin{letter-spacing:.3em;font-size:20px;max-width:200px}
+#login .entrer{max-width:260px;width:100%;padding:13px;border-radius:var(--r);
+  background:#fff;color:var(--navy);font-weight:700;font-size:15px;margin-top:4px}
 #login input::placeholder{color:rgba(255,255,255,.5)}
 #login .err{font-size:13px;height:18px;margin-top:10px;color:#FFD9D5}
 .badge-mode{font-size:11px;color:rgba(255,255,255,.7);margin-top:20px;max-width:320px}
@@ -248,7 +251,10 @@ textarea{min-height:84px;resize:vertical;font-size:15px;line-height:1.5}
 <div id="login">
   <div class="mark">BKCO<br><em>Orga</em></div>
   <p>Le poste de pilotage des restaurants</p>
-  <input id="pin" type="tel" inputmode="numeric" maxlength="6" placeholder="••••" autocomplete="off">
+  <input id="mail" type="email" inputmode="email" placeholder="E-mail" autocomplete="username"
+         autocapitalize="off" autocorrect="off">
+  <input id="pin" type="password" inputmode="numeric" maxlength="6" placeholder="Code" autocomplete="current-password">
+  <button class="entrer" onclick="connexion()">Entrer</button>
   <div class="err" id="pinErr"></div>
   <div class="badge-mode" id="mode"></div>
 </div>
@@ -389,11 +395,11 @@ textarea{min-height:84px;resize:vertical;font-size:15px;line-height:1.5}
     </select></div>
     <div><label>Code d'accès</label><input id="u-pin" type="tel" inputmode="numeric" maxlength="6" placeholder="4 chiffres"></div>
   </div>
-  <div class="row">
-    <div><label>Restaurant dirigé</label><select id="u-resto"></select></div>
-    <div><label>Rattaché à</label><select id="u-sup"></select></div>
-  </div>
-  <div class="muted">Un compte avec un restaurant ne voit que ce restaurant. Laisse vide pour un accès à tout le groupe.</div>
+  <label>E-mail</label><input id="u-mail" type="email" autocapitalize="off" placeholder="prenom@bkco.fr">
+  <label>Rattaché à</label><select id="u-sup"></select>
+  <label>Périmètre</label>
+  <div class="seg" id="u-perim"></div>
+  <div class="muted">Aucun restaurant coché = accès à tout le groupe.</div>
   <label>Accès</label>
   <select id="u-actif"><option value="1">Actif</option><option value="0">Désactivé</option></select>
   <div class="muted">Un compte désactivé ne peut plus se connecter, mais tout ce qu'il a noté reste en place.</div>
@@ -540,10 +546,11 @@ function couleur(it){
    - prive = true, avec assigné -> l'auteur et la personne assignée */
 /* Périmètre : un compte rattaché à un restaurant ne voit que celui-ci
    (plus les sujets transverses et ce qui le concerne personnellement). */
-const perimetre    = ()=> (S.moi && S.moi.restaurant_id) ? S.moi.restaurant_id : null;
-const restosVus    = ()=> { const p=perimetre(); return p? S.restos.filter(r=>r.id==p) : S.restos; };
+const perimetre    = ()=> { const p=S.moi&&S.moi.restaurants; return (Array.isArray(p)&&p.length)? p : null; };
+const restosVus    = ()=> { const p=perimetre(); return p? S.restos.filter(r=>p.includes(r.id)) : S.restos; };
 const dansPerimetre= i => { const p=perimetre();
-  return !p || i.restaurant_id==null || i.restaurant_id==p || i.assigne_id==S.moi.id || i.auteur_id==S.moi.id; };
+  return !p || i.restaurant_id==null || p.includes(i.restaurant_id)
+      || i.assigne_id==S.moi.id || i.auteur_id==S.moi.id; };
 const perso        = i => i.prive && !i.assigne_id;
 const pourMoi      = i => !i.prive || (S.moi && (i.auteur_id==S.moi.id || i.assigne_id==S.moi.id));
 const visibles     = ()=> S.items.filter(i=>pourMoi(i) && dansPerimetre(i) && !perso(i));
@@ -1079,7 +1086,7 @@ function renderMoi(){
       return `<button class="membre" onclick="openUser(${u.id})">
         <span class="ini">${ini}</span>
         <span><span class="nm">${esc(u.nom)}${u.id==S.moi.id?' (toi)':''}</span><br>
-        <span class="po">${esc(u.role||'')}${u.restaurant_id?' · '+esc(nomResto(u.restaurant_id)):''}${u.superieur_id?' · sous '+esc(nomUser(u.superieur_id)):''} · code ${esc(u.pin||'—')}${u.actif===false?' · désactivé':''}</span></span>
+        <span class="po">${esc(u.role||'')} · ${(u.restaurants&&u.restaurants.length)? u.restaurants.map(x=>esc(nomResto(x))).join(', ') : 'tout le groupe'}${u.superieur_id?' · sous '+esc(nomUser(u.superieur_id)):''}<br>${esc(u.email||'sans e-mail')} · code ${esc(u.pin||'—')}${u.actif===false?' · désactivé':''}</span></span>
         ${n?`<span class="cnt"><span class="bubble n">${n}</span></span>`:''}</button>`;
     }).join('')
       + `<button class="btn sec" onclick="openUser()">Ajouter un utilisateur</button>`
@@ -1281,8 +1288,11 @@ function openUser(id){
   const roles=['Direction','Superviseur','Directeur','Autre'];
   const r=u&&u.role?u.role:'Superviseur';
   $('u-role').innerHTML=[...new Set([...roles,r])].map(x=>`<option ${x===r?'selected':''}>${esc(x)}</option>`).join('');
-  $('u-resto').innerHTML='<option value="">Tout le groupe</option>'+S.restos.map(r=>
-    `<option value="${r.id}" ${u&&u.restaurant_id==r.id?'selected':''}>${esc(r.nom)}</option>`).join('');
+  $('u-mail').value=u?(u.email||''):'';
+  const per=(u&&Array.isArray(u.restaurants))?u.restaurants:[];
+  $('u-perim').innerHTML=S.restos.map(r=>
+    `<button type="button" data-r="${r.id}" class="${per.includes(r.id)?'on':''}"
+      onclick="this.classList.toggle('on')">${esc(r.nom)}</button>`).join('');
   $('u-sup').innerHTML='<option value="">—</option>'+S.tousUsers.filter(x=>!x.restaurant_id&&(!u||x.id!=u.id)).map(x=>
     `<option value="${x.id}" ${u&&u.superieur_id==x.id?'selected':''}>${esc(x.nom)}</option>`).join('');
   $('u-actif').value=(u&&u.actif===false)?'0':'1';
@@ -1294,14 +1304,17 @@ async function saveUser(){
   const pin=$('u-pin').value.replace(/\D/g,'');
   if(pin.length<4) return toast('Le code doit faire au moins 4 chiffres');
   if(S.tousUsers.some(u=>u.pin===pin && u.id!=S.editUser)) return toast('Ce code est déjà utilisé');
+  const per=[...$('u-perim').querySelectorAll('button.on')].map(b=>+b.dataset.r);
   const row={nom,role:$('u-role').value,pin,actif:$('u-actif').value==='1',
-             restaurant_id:$('u-resto').value? +$('u-resto').value : null,
+             email:$('u-mail').value.trim().toLowerCase()||null,
+             restaurants:per,
+             restaurant_id:per.length===1?per[0]:null,
              superieur_id:$('u-sup').value? +$('u-sup').value : null};
   try{
     if(S.editUser){ await dbUpdate('orga_utilisateurs',S.editUser,row); }
     else{ await dbInsert('orga_utilisateurs',row); }
     await charger();
-    if(S.editUser==S.moi.id){ S.moi.nom=row.nom; S.moi.role=row.role; S.moi.restaurant_id=row.restaurant_id;
+    if(S.editUser==S.moi.id){ S.moi.nom=row.nom; S.moi.role=row.role; S.moi.restaurants=row.restaurants;
       sess('bkco_orga_moi',JSON.stringify(S.moi)); }
     closeSheet('sh-user'); render(); toast('Enregistré');
   }catch(e){ toast('Erreur : '+e.message); }
@@ -1369,20 +1382,35 @@ function toast(m){ const t=$('toast'); t.textContent=m; t.classList.add('on');
    13. AUTHENTIFICATION + DÉMARRAGE
    ============================================================ */
 function sess(k,v){ try{ if(v===undefined) return sessionStorage.getItem(k); sessionStorage.setItem(k,v); }catch(e){ return null; } }
-$('pin').addEventListener('input',async e=>{
-  const v=e.target.value;
-  if(v.length<4) return;
+async function connexion(){
+  const mail=$('mail').value.trim().toLowerCase();
+  const pin=$('pin').value.trim();
+  const err=m=>{ $('pinErr').textContent=m; $('pin').value=''; };
+  if(pin.length<4) return err('Code trop court');
   let u=null;
   if(SB){
-    try{ const {data}=await SB.from('orga_utilisateurs').select('*').eq('pin',v).eq('actif',true);
-         if(data&&data.length) u=data[0]; }catch(err){}
+    try{ const {data}=await SB.from('orga_utilisateurs').select('*').eq('pin',pin).eq('actif',true);
+         if(data&&data.length) u=data[0]; }
+    catch(e){ return err('Connexion impossible'); }
   }else{
-    u=mem.orga_utilisateurs.find(x=>x.pin===v)||null;
+    u=mem.orga_utilisateurs.find(x=>x.pin===pin)||null;
+    if(!u && pin===PIN_SECOURS) u={id:1,nom:'Moi',role:'Direction'};
   }
-  if(!u && v===PIN_SECOURS) u={id:1,nom:'Moi',role:'admin'};
-  if(u){ S.moi={id:u.id,nom:u.nom,role:u.role,restaurant_id:u.restaurant_id||null,superieur_id:u.superieur_id||null}; sess('bkco_orga_moi',JSON.stringify(S.moi)); demarrer(); }
-  else { $('pinErr').textContent='Code incorrect'; e.target.value=''; }
-});
+  /* L'e-mail n'est exigé que sur les comptes où il est renseigné :
+     personne ne se retrouve enfermé dehors le jour de la migration. */
+  if(u && u.email && u.email.toLowerCase()!==mail) u=null;
+  if(!u) return err('E-mail ou code incorrect');
+  S.moi={id:u.id,nom:u.nom,role:u.role,email:u.email||null,
+         restaurants:Array.isArray(u.restaurants)?u.restaurants:[],
+         superieur_id:u.superieur_id||null};
+  sess('bkco_orga_moi',JSON.stringify(S.moi));
+  try{ localStorage.setItem('bkco_orga_mail',mail); }catch(e){}
+  demarrer();
+}
+$('pin').addEventListener('keydown',e=>{ if(e.key==='Enter') connexion(); });
+$('mail').addEventListener('keydown',e=>{ if(e.key==='Enter') $('pin').focus(); });
+try{ const m=localStorage.getItem('bkco_orga_mail'); if(m) $('mail').value=m; }catch(e){}
+
 function logout(){ try{ sessionStorage.removeItem('bkco_orga_moi'); }catch(e){} location.reload(); }
 
 async function charger(){
@@ -1394,7 +1422,8 @@ async function charger(){
   S.users=S.tousUsers.filter(x=>x.actif!==false).map(x=>({id:x.id,nom:x.nom,role:x.role}));
   if(S.moi){
     const a=S.tousUsers.find(x=>x.id==S.moi.id);          // périmètre toujours à jour
-    if(a){ S.moi.restaurant_id=a.restaurant_id||null; S.moi.role=a.role; S.moi.nom=a.nom; }
+    if(a){ S.moi.restaurants=Array.isArray(a.restaurants)?a.restaurants:[];
+           S.moi.role=a.role; S.moi.nom=a.nom; }
     if(!S.users.some(x=>x.id==S.moi.id)) S.users.unshift(S.moi);
   }
 }
