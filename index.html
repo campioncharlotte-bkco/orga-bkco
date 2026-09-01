@@ -325,7 +325,7 @@ textarea{min-height:84px;resize:vertical;font-size:15px;line-height:1.5}
 </div>
 
 <nav class="nav">
-  <button data-v="capture" onclick="go('capture')"><span class="g">✎</span>Capture</button>
+  <button data-v="capture" onclick="go('capture')"><span class="g">✎</span>Talk to me</button>
   <button data-v="pilotage" class="on" onclick="go('pilotage')"><span class="g">◈</span>Pilotage</button>
   <button data-v="restos" onclick="go('restos')"><span class="g">▦</span>Restos</button>
   <button data-v="ordre" onclick="go('ordre')"><span class="g">≡</span>Ordre</button>
@@ -666,9 +666,17 @@ function analyseLocale(texte){
     const t = norm(bout);
     const doute=[];
     const prive = /(^| )(perso|personnel|pour moi|prive|note pour moi)( |$)/.test(t);
+    /* Une tâche confiée à quelqu'un : « demander le planning à Pauline »,
+       « voir avec Thomas », « Agnès doit relancer ». Le prénom d'un compte
+       cité dans la phrase suffit — sauf le sien. */
     let assigne=null, alen=0;
-    S.users.forEach(u=>{ const n=norm(u.nom).split(' ')[0];
-      if(n.length>=3 && n.length>alen && new RegExp('(pour|avec|demander a|voir avec|delegue a) '+n).test(t)){ assigne=u.id; alen=n.length; } });
+    S.users.forEach(u=>{
+      if(S.moi && u.id==S.moi.id) return;
+      const n=norm(u.nom).split(' ')[0];
+      if(n.length>=3 && n.length>alen && new RegExp('(^|[^a-z])'+n+'([^a-z]|$)').test(t)){
+        assigne=u.id; alen=n.length;
+      }
+    });
     let resto = detectResto(t);
     const membre = detectMembre(t);
     if(!resto && membre) resto = membre.restaurant_id;
@@ -929,7 +937,7 @@ function renderPilotage(){
   const top = trie(ouv).slice(0,6);
   $('top-list').innerHTML = top.length
     ? top.map((it,i)=>ligneItem(it,i+1)).join('')
-    : `<div class="empty"><b>Rien en attente</b>Note un sujet depuis l'écran Capture</div>`;
+    : `<div class="empty"><b>Rien en attente</b>Note un sujet depuis l'écran Talk to me</div>`;
   $('pil-restos').innerHTML = restosVus().map(r=>{
     const l=ouv.filter(i=>concerne(i,r.id));
     const urg=l.filter(i=>i.priorite==1||(jours(i.echeance)!==null&&jours(i.echeance)<0)).length;
@@ -1106,7 +1114,7 @@ function ordreParCat(c){ S.filtreCat=c; S.filtreStatut='ouvert'; go('ordre'); }
 function setTab(t){ S.tab=t; renderResto(); window.scrollTo(0,0); }
 
 function render(){
-  if(S.view==='capture'){ $('title').textContent='Capture';
+  if(S.view==='capture'){ $('title').textContent='Talk to me';
     const o=ouverts().length; $('subtitle').innerHTML=o+' sujet'+(o>1?'s':'')+' ouvert'+(o>1?'s':'');
     bienvenue(); renderChat(); }
   if(S.view==='pilotage'){ $('title').textContent='Pilotage';
