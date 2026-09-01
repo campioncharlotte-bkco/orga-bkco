@@ -928,7 +928,9 @@ function ligneItem(it,rang){
                  ou pas encore attribué ;
    - « Restos » : ce qui a été délégué au terrain (directeurs, managers). */
 function roleDe(id){ const u=S.users.find(x=>x.id==id); return u?(u.role||''):''; }
-const estSupervision = r => /direction|superviseur|admin/i.test(r||'');
+/* « supervis » couvre superviseur et superviseuse ; « Directeur » et
+   « Directrice » ne matchent pas « direction » et restent au niveau terrain. */
+const estSupervision = r => /direction|supervis|admin|franchis/i.test(r||'');
 const niveauBKCO = i => !i.assigne_id || estSupervision(roleDe(i.assigne_id));
 function lotPilotage(liste){
   return S.pilot==='bkco' ? liste.filter(niveauBKCO) : liste.filter(i=>!niveauBKCO(i));
