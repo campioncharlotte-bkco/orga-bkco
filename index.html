@@ -1162,7 +1162,10 @@ function renderOrdre(){
   const q=norm($('q').value||'');
   let l = S.filtreStatut==='fait'? visibles().filter(i=>i.statut==='Fait') : ouverts();
   if(S.filtreCat!=='tout') l=l.filter(i=>i.categorie===S.filtreCat);
-  if(q) l=l.filter(i=>norm((i.titre||'')+' '+(i.description||'')+' '+(i.responsable||'')+' '+nomResto(i.restaurant_id)).includes(q));
+  /* La recherche couvre aussi la personne assignée et l'auteur :
+     c'est ce qui rend cliquable la répartition « par personne ». */
+  if(q) l=l.filter(i=>norm([i.titre,i.description,i.responsable,nomResto(i.restaurant_id),
+        nomUser(i.assigne_id),nomUser(i.auteur_id)].filter(Boolean).join(' ')).includes(q));
   l=trie(l);
   $('ordre-filtres').innerHTML =
     `<button class="tab ${S.filtreStatut==='ouvert'?'on':''}" onclick="setF('statut','ouvert')">Ouverts</button>
