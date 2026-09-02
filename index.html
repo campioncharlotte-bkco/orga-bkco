@@ -1401,7 +1401,7 @@ function verifEtapes(){
   if(segVal('f-statut')==='Fait') return;
   if(confirm("Toutes les étapes sont faites.\n\nMarquer le sujet comme traité ?")){
     seg('f-statut', STATUTS.map(s=>({v:s,l:s})), 'Fait');
-    toast('Statut passé à Fait — enregistre pour valider');
+    saveItem();                                   // enregistré et refermé, sans geste de plus
   }
 }
 function addAction(){
