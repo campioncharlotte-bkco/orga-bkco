@@ -971,6 +971,8 @@ async function basculeFait(id,ev){
 function ligneItem(it,rang){
   const r = raisons(it).map(([c,t])=>`<span class="chip ${c}">${t}</span>`).join('');
   const assigne = nomUser(it.assigne_id);
+  const et = Array.isArray(it.actions)? it.actions : [];
+  const faites = et.filter(a=>a.fait).length;
   const auteur  = (S.moi && it.auteur_id && it.auteur_id!=S.moi.id) ? nomUser(it.auteur_id) : null;
   return `<div class="item ${it.statut==='Fait'?'done':''}">
     <span class="rail" style="background:${couleur(it)}"></span>
@@ -986,6 +988,7 @@ function ligneItem(it,rang){
         ${it.responsable?`<span class="chip">→ ${esc(it.responsable)}</span>`:''}
         ${auteur?`<span class="chip">noté par ${esc(auteur)}</span>`:''}
         ${perso(it)?`<span class="chip">moi seule</span>`:(it.prive?`<span class="chip">restreint</span>`:'')}
+        ${et.length?`<span class="chip ${faites===et.length?'ok':'now'}">${faites}/${et.length} étapes</span>`:''}
       </span>
     </span></button>
     <button class="coche ${it.statut==='Fait'?'ok':''}" onclick="basculeFait(${it.id},event)"
