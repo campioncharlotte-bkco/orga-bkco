@@ -521,6 +521,11 @@ function score(it){
   return Math.round(s);
 }
 function raisons(it){
+  /* Un sujet clos n'est ni en retard ni urgent : on n'affiche que sa clôture. */
+  if(it.statut==='Fait'){
+    const d=it.date_cloture? new Date(it.date_cloture):null;
+    return [['ok', d? 'Traité le '+String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0') : 'Traité']];
+  }
   const out=[]; const j=jours(it.echeance);
   if(j!==null && j<0) out.push(['late','Retard '+(-j)+' j']);
   else if(j===0)      out.push(['late',"Pour aujourd'hui"]);
