@@ -340,6 +340,12 @@ textarea{min-height:84px;resize:vertical;font-size:15px;line-height:1.5}
   <div class="hd"><h2 id="item-h">Nouveau sujet</h2><button onclick="closeSheet('sh-item')">Fermer</button></div>
   <label>Sujet</label>
   <input id="f-titre" placeholder="Ex : Friteuse 2 en panne">
+  <label>Étapes</label>
+  <div class="acts" id="f-actions"></div>
+  <div class="row" style="margin-top:8px">
+    <input id="f-newact" placeholder="Ajouter une étape">
+    <button class="tab" style="flex:0 0 auto" onclick="addAction()">Ajouter</button>
+  </div>
   <div class="row">
     <div id="bloc-resto"><label>Restaurant</label><select id="f-resto"></select></div>
     <div><label>À traiter</label><select id="f-echeance"></select></div>
@@ -360,12 +366,6 @@ textarea{min-height:84px;resize:vertical;font-size:15px;line-height:1.5}
   </div>
   <label>Détail</label>
   <textarea id="f-desc" placeholder="Contexte, ce qui a déjà été fait, ce qui bloque…"></textarea>
-  <label>Étapes</label>
-  <div class="acts" id="f-actions"></div>
-  <div class="row" style="margin-top:8px">
-    <input id="f-newact" placeholder="Ajouter une étape">
-    <button class="tab" style="flex:0 0 auto" onclick="addAction()">Ajouter</button>
-  </div>
   <button class="btn" onclick="saveItem()">Enregistrer</button>
   <button class="btn sec" id="b-clore" onclick="cloreItem()">Marquer comme traité</button>
   <button class="btn del" id="b-suppr" onclick="delItem()">Supprimer</button>
