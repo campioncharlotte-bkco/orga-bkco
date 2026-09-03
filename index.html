@@ -1376,7 +1376,9 @@ function openItem(id,restoDefaut,catDefaut,opts){
   optionsResto($('f-resto'), it? it.restaurant_id : (estPerso?null:(restoDefaut||S.resto||S.restos[0].id)), estPerso);
   if(estPerso || (it && it.restaurant_id==null)) $('f-resto').value='';
   $('f-cat').innerHTML = CATS.map(c=>`<option value="${c.id}">${c.nom}</option>`).join('');
-  $('f-cat').value = it? it.categorie : (estPerso?'perso':(catDefaut||'probleme'));
+  /* « Visible de moi seule » n'implique pas la catégorie Perso :
+     une tâche pro reste rangée dans sa catégorie métier. */
+  $('f-cat').value = it? it.categorie : (catDefaut || (estPerso?'perso':'probleme'));
   seg('f-prio',   PRIOS.map(p=>({v:p.v,l:p.l})), it? it.priorite:2);
   seg('f-statut', STATUTS.map(s=>({v:s,l:s})),   it? it.statut:'À traiter');
   optionsUser('f-assigne', it? it.assigne_id : null);
