@@ -190,8 +190,6 @@ a{color:var(--navy)}
   background:var(--card);border:1px solid var(--line)}
 .saisie button{flex:0 0 48px;height:48px;border-radius:50%;background:var(--orange);color:#fff;
   font-size:19px;display:flex;align-items:center;justify-content:center}
-.saisie button.mic{background:var(--card);border:1px solid var(--line);color:var(--ink-2)}
-.saisie button.mic.rec{background:var(--close);border-color:var(--close);color:#fff}
 
 /* ===================================================================
    5. FORMULAIRES
@@ -277,7 +275,6 @@ textarea{min-height:84px;resize:vertical;font-size:15px;line-height:1.5}
   <section class="screen" id="s-capture">
     <div id="chat-flux"></div>
     <div class="saisie">
-      <button class="mic" id="btn-mic" onclick="dicter()" aria-label="Dicter">🎙</button>
       <textarea id="msg" rows="1" placeholder="Dis ce que tu as en tête…"></textarea>
       <button onclick="envoyer()" aria-label="Envoyer">↑</button>
     </div>
@@ -923,40 +920,6 @@ $('msg').addEventListener('keydown',e=>{ if(e.key==='Enter'&&(e.metaKey||e.ctrlK
 
 /* Dictée vocale. On demande d'abord l'accès micro pour déclencher la
    demande d'autorisation, puis on annonce clairement chaque échec. */
-let reco=null;
-async function dicter(){
-  const R = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if(!R){ toast("Ce navigateur ne dicte pas — utilise le micro de ton clavier"); $('msg').focus(); return; }
-  if(reco){ try{ reco.stop(); }catch(e){} return; }
-  if(!window.isSecureContext){ toast('Dictée impossible hors HTTPS'); return; }
-  try{
-    if(navigator.mediaDevices && navigator.mediaDevices.getUserMedia){
-      const flux=await navigator.mediaDevices.getUserMedia({audio:true});
-      flux.getTracks().forEach(t=>t.stop());
-    }
-  }catch(e){ toast("Micro bloqué : autorise-le pour ce site"); return; }
-
-  reco=new R();
-  reco.lang='fr-FR'; reco.interimResults=true; reco.continuous=false; reco.maxAlternatives=1;
-  const base=$('msg').value.trim();
-  reco.onstart =()=>{ $('btn-mic').classList.add('rec'); toast('Je t\'écoute…'); };
-  reco.onresult=e=>{
-    let s=''; for(let k=0;k<e.results.length;k++) s+=e.results[k][0].transcript;
-    $('msg').value=(base?base+' ':'')+s;
-    $('msg').dispatchEvent(new Event('input'));
-  };
-  reco.onerror=ev=>{
-    const msg={'not-allowed':"Micro refusé : autorise-le pour ce site",
-               'service-not-allowed':"Dictée bloquée par le navigateur",
-               'no-speech':"Je n'ai rien entendu",
-               'audio-capture':"Aucun micro détecté",
-               'network':"Dictée indisponible : connexion requise"};
-    toast(msg[ev.error]||('Dictée : '+ev.error));
-  };
-  reco.onend  =()=>{ reco=null; $('btn-mic').classList.remove('rec'); };
-  try{ reco.start(); }catch(e){ reco=null; $('btn-mic').classList.remove('rec'); toast('Dictée impossible'); }
-}
-
 /* ============================================================
    8. RENDU GÉNÉRAL
    ============================================================ */
